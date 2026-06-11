@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSI Hospitality — Financial Analysis Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --navy:#1f3a5f;--navy2:#2e5077;--panel:#fff;--panel2:#f7f9fc;
+    --gold:#b8902f;--coral:#d65a3c;--teal:#2f9488;--sky:#3f7cbf;--violet:#7a6cc4;
+    --green:#2f9488;--red:#c0492f;
+    --ink:#1c2b40;--muted:#6b7c93;--line:rgba(31,58,95,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+    background:radial-gradient(1100px 560px at 82% -12%,#eaf0f8,#f4f7fb 50%,#eef2f7) fixed,#eef2f7;
+    color:var(--ink);padding:26px 22px 60px;min-height:100vh}
+  .wrap{max-width:1300px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;
+    padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--line)}
+  .brand h1{font-size:23px;font-weight:700;color:var(--navy)}
+  .brand .sub{color:var(--gold);font-size:11px;letter-spacing:3px;font-weight:600;margin-top:4px;text-transform:uppercase}
+  .controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .btn{background:var(--navy);color:#fff;border:none;padding:9px 14px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(31,58,95,.18)}
+  .btn:hover{background:var(--navy2)}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn-gold{background:var(--gold)}.btn-gold:hover{background:#a07828}
+  select{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(31,58,95,.06)}
+  .status{font-size:10.5px;color:var(--muted)}
+
+  /* tabs */
+  .tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+  .tab{padding:9px 18px;border-radius:11px;border:1px solid var(--line);background:#fff;color:var(--muted);
+    font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 3px 10px rgba(31,58,95,.05)}
+  .tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px 18px;position:relative;overflow:hidden;box-shadow:0 6px 18px rgba(31,58,95,.07)}
+  .kpi::after{content:'';position:absolute;right:-30px;top:-30px;width:86px;height:86px;border-radius:50%;background:radial-gradient(circle,rgba(184,144,47,.13),transparent 70%)}
+  .kpi .lbl{font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:7px}
+  .kpi .val{font-size:23px;font-weight:800;color:var(--navy);line-height:1}
+  .kpi .note{font-size:10.5px;color:var(--muted);margin-top:6px}
+  .kpi .val.pos{color:var(--green)} .kpi .val.neg{color:var(--red)}
+
+  .grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px}
+  .grid2b{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  .card{background:linear-gradient(160deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:0 6px 18px rgba(31,58,95,.07)}
+  .card h3{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:3px}
+  .card .cap{font-size:10.5px;color:var(--muted);opacity:.85;margin-bottom:11px}
+  .chart-box{position:relative;height:290px}.chart-sm{position:relative;height:230px}.donut-wrap{position:relative;height:230px}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  th,td{padding:9px 9px;text-align:right}th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-size:10px;letter-spacing:.5px;text-transform:uppercase;border-bottom:1px solid var(--line);font-weight:600}
+  tbody tr{border-bottom:1px solid var(--line)}tbody td{font-variant-numeric:tabular-nums}
+  tr.grp td{font-weight:700;color:var(--navy);background:var(--panel2)}
+  tr.sub td:first-child{padding-left:22px;color:var(--ink)}
+  tr.tot td{font-weight:800;color:var(--gold);border-top:2px solid var(--line)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:middle}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .footer{margin-top:24px;text-align:center;color:var(--muted);font-size:11px}
+  .hint{background:#fff;border:1px dashed var(--line);border-radius:16px;padding:34px;text-align:center;color:var(--muted);box-shadow:0 6px 18px rgba(31,58,95,.06);margin-bottom:18px}
+  .hint b{color:var(--navy)}
+  .view{display:none}.view.active{display:block}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid2,.grid2b{grid-template-columns:1fr}}
+
+  /* ====== Sales Register specific styles ====== */
+  #view-sales-register .sr-section{margin-bottom:20px}
+  #view-sales-register .sr-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px}
+  #view-sales-register .sr-form-col{display:flex;flex-direction:column;gap:10px}
+  #view-sales-register .sr-field{display:flex;flex-direction:column;gap:5px}
+  #view-sales-register .sr-field label{font-size:11px;font-weight:700;color:var(--navy);letter-spacing:.5px;text-transform:uppercase}
+  #view-sales-register .sr-field .helper{font-size:10px;color:var(--muted);font-style:italic;margin-top:2px}
+  #view-sales-register .sr-field input[type="month"],
+  #view-sales-register .sr-field input[type="file"]{
+    padding:8px 11px;border-radius:9px;border:1px solid var(--line);background:#fff;
+    color:var(--ink);font-size:12px;font-family:inherit;width:100%;
+    box-shadow:0 2px 8px rgba(31,58,95,.05);transition:border-color .2s}
+  #view-sales-register .sr-field input:focus{outline:none;border-color:var(--navy2)}
+  #view-sales-register .sr-week-list{display:flex;flex-direction:column;gap:6px}
+  #view-sales-register .sr-week-row{display:flex;align-items:center;gap:8px}
+  #view-sales-register .sr-week-row .wk-lbl{font-size:11px;color:var(--muted);min-width:48px;font-weight:600}
+  #view-sales-register .sr-week-row input[type="file"]{flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);font-size:11.5px;font-family:inherit}
+  #view-sales-register .sr-actions{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  #view-sales-register .sr-status{font-size:11.5px;color:var(--muted);min-height:18px;margin-top:8px;padding:6px 10px;border-radius:8px;background:rgba(31,58,95,.04);border:1px solid var(--line)}
+  #view-sales-register .sr-status.error{color:var(--red);background:rgba(192,73,47,.06);border-color:rgba(192,73,47,.18)}
+  #view-sales-register .sr-status.success{color:var(--green);background:rgba(47,148,136,.06);border-color:rgba(47,148,136,.2)}
+  #view-sales-register .history-tbl{font-size:12px}
+  #view-sales-register .history-tbl thead th{font-size:10px}
+  #view-sales-register .history-tbl td{vertical-align:middle}
+  #view-sales-register .btn-sm{padding:5px 11px;font-size:11px;border-radius:7px}
+  #view-sales-register .sr-empty{text-align:center;color:var(--muted);font-size:12px;padding:22px 0}
+  #view-sales-register .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(31,58,95,.08);color:var(--navy)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>OSI Hospitality Private Limited</h1>
+      <div class="sub">Financial Analysis Dashboard · FY 2026-27</div>
+    </div>
+    <div class="controls">
+      <select id="period"><option value="M">Monthly</option><option value="Q">Quarterly</option><option value="Y">Yearly (FY)</option></select>
+      <select id="periodPick"></select>
+      <button class="btn" id="upload">📂 Load TB file</button>
+      <input type="file" id="file" accept=".xlsx,.xlsm" style="display:none">
+      <span class="status" id="status">Showing dummy data</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-v="sales">Sales</div>
+    <div class="tab" data-v="pnl">P&amp;L</div>
+    <div class="tab" data-v="bs">Balance Sheet</div>
+    <div class="tab" data-v="cost">Top Cost</div>
+    <div class="tab" data-v="tax">Tax</div>
+    <div class="tab" data-v="sales-register">Sales Register</div>
+  </div>
+
+  <!-- SALES -->
+  <section class="view active" id="view-sales">
+    <div class="kpis" id="salesKpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Revenue Trend</h3><div class="cap" id="salesTrendCap"></div><div class="chart-box"><canvas id="salesTrend"></canvas></div></div>
+      <div class="card"><h3>Revenue Mix</h3><div class="cap">Share by channel</div><div class="donut-wrap"><canvas id="salesDonut"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Channel Summary</h3><div class="cap" id="salesTblCap"></div>
+      <table id="salesTbl"><thead><tr><th>Channel</th><th>Revenue</th><th>% of Sales</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+    </div>
+  </section>
+
+  <!-- P&L -->
+  <section class="view" id="view-pnl">
+    <div class="kpis" id="pnlKpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Revenue vs Expenses vs Profit</h3><div class="cap" id="pnlTrendCap"></div><div class="chart-box"><canvas id="pnlTrend"></canvas></div></div>
+      <div class="card"><h3>Cost Breakdown</h3><div class="cap">Major expense heads</div><div class="donut-wrap"><canvas id="pnlDonut"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Profit &amp; Loss Statement</h3><div class="cap" id="pnlTblCap"></div>
+      <table id="pnlTbl"><thead><tr><th>Particulars</th><th>Amount</th><th>% of Revenue</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- BALANCE SHEET -->
+  <section class="view" id="view-bs">
+    <div class="kpis" id="bsKpis"></div>
+    <div class="grid2b">
+      <div class="card"><h3>Assets Composition</h3><div class="cap">By category</div><div class="donut-wrap"><canvas id="bsAssets"></canvas></div></div>
+      <div class="card"><h3>Liabilities &amp; Equity</h3><div class="cap">By category</div><div class="donut-wrap"><canvas id="bsLiab"></canvas></div></div>
+    </div>
+    <div class="grid2b">
+      <div class="card"><h3>Balance Sheet</h3><div class="cap" id="bsTblCap"></div>
+        <table id="bsTbl"><thead><tr><th>Particulars</th><th>Amount</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card"><h3>Key Ratios</h3><div class="cap">As at period end</div>
+        <table id="ratioTbl"><thead><tr><th>Ratio</th><th>Value</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TOP COST -->
+  <section class="view" id="view-cost">
+    <div class="kpis" id="costKpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Top Cost Ledgers</h3><div class="cap" id="costRankCap"></div><div class="chart-box"><canvas id="costRank"></canvas></div></div>
+      <div class="card"><h3>Cost by Sub-Group</h3><div class="cap">Share of total cost</div><div class="donut-wrap"><canvas id="costDonut"></canvas></div></div>
+    </div>
+    <div class="grid2b">
+      <div class="card"><h3>Cost Ledgers — Ranked</h3><div class="cap" id="costTblCap"></div>
+        <table id="costTbl"><thead><tr><th>Ledger</th><th>Amount</th><th>% of Rev</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+      </div>
+      <div class="card"><h3>Cost by Sub-Group</h3><div class="cap" id="costSubCap"></div>
+        <table id="costSubTbl"><thead><tr><th>Sub-Group</th><th>Amount</th><th>% of Rev</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAX & COST -->
+  <section class="view" id="view-tax">
+    <div class="kpis" id="taxKpis"></div>
+    <div class="grid2">
+      <div class="card"><h3>Cost as % of Revenue</h3><div class="cap" id="taxTrendCap"></div><div class="chart-box"><canvas id="taxTrend"></canvas></div></div>
+      <div class="card"><h3>GST Position</h3><div class="cap">Output vs input (period end)</div><div class="donut-wrap"><canvas id="taxDonut"></canvas></div></div>
+    </div>
+    <div class="card"><h3>Cost &amp; Tax Heads</h3><div class="cap" id="taxTblCap"></div>
+      <table id="taxTbl"><thead><tr><th>Head</th><th>Amount</th><th>% of Revenue</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- SALES REGISTER -->
+  <section class="view" id="view-sales-register">
+
+    <!-- Upload & Generate Card -->
+    <div class="card sr-section" id="sr-upload-card">
+      <h3>Generate Sales Register</h3>
+      <div class="cap">Upload channel exports to generate a consolidated Sales_Register.xlsx</div>
+
+      <div class="sr-form-grid">
+        <!-- Left column -->
+        <div class="sr-form-col">
+          <div class="sr-field">
+            <label for="sr-month">Month</label>
+            <input type="month" id="sr-month" name="sr-month">
+          </div>
+
+          <div class="sr-field">
+            <label>Airbnb Weekly Exports (up to 5 files)</label>
+            <div class="helper">Airbnb only allows weekly exports — upload all weeks for the month.</div>
+            <div class="sr-week-list">
+              <div class="sr-week-row"><span class="wk-lbl">Week 1*</span><input type="file" accept=".xlsx" id="sr-ab-w1" name="sr-ab-w1"></div>
+              <div class="sr-week-row"><span class="wk-lbl">Week 2</span><input type="file" accept=".xlsx" id="sr-ab-w2" name="sr-ab-w2"></div>
+              <div class="sr-week-row"><span class="wk-lbl">Week 3</span><input type="file" accept=".xlsx" id="sr-ab-w3" name="sr-ab-w3"></div>
+              <div class="sr-week-row"><span class="wk-lbl">Week 4</span><input type="file" accept=".xlsx" id="sr-ab-w4" name="sr-ab-w4"></div>
+              <div class="sr-week-row"><span class="wk-lbl">Week 5</span><input type="file" accept=".xlsx" id="sr-ab-w5" name="sr-ab-w5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div class="sr-form-col">
+          <div class="sr-field">
+            <label for="sr-mmt">MakeMyTrip / Goibibo Export (.csv)</label>
+            <input type="file" accept=".csv" id="sr-mmt" name="sr-mmt">
+          </div>
+
+          <div class="sr-field">
+            <label for="sr-direct">Direct Sales / Payments Export (.xlsx)</label>
+            <input type="file" accept=".xlsx" id="sr-direct" name="sr-direct">
+          </div>
+        </div>
+      </div>
+
+      <div class="sr-actions">
+        <button class="btn" id="sr-process-btn">⚙️ Process &amp; Download</button>
+        <button class="btn btn-gold" id="sr-save-btn">💾 Save to History</button>
+      </div>
+      <div class="sr-status" id="sr-status">Ready — select files and click Process.</div>
+    </div>
+
+    <!-- History Card -->
+    <div class="card sr-section" id="sr-history-card">
+      <h3>Saved Months</h3>
+      <div class="cap">Past months saved to Supabase — click Download to re-download any file.</div>
+      <div id="sr-history-body">
+        <div class="sr-empty">Loading history…</div>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="footer">Built from the Trial Balance + Mapping workbook · dummy data shown until your TB is loaded</div>
+</div>
+
+<script>
+/*
+ * ============================================================
+ * SUPABASE SCHEMA — Run once in Supabase SQL editor
+ * ============================================================
+ *
+ * create table if not exists monthly_uploads (
+ *   id uuid primary key default gen_random_uuid(),
+ *   month_year varchar(7) not null,          -- e.g. '2026-04'
+ *   display_label varchar(20) not null,      -- e.g. 'April 2026'
+ *   uploaded_at timestamptz default now(),
+ *   airbnb_file_count int default 0,
+ *   file_path text                           -- path in storage bucket
+ * );
+ *
+ * Storage bucket (create manually in Supabase dashboard):
+ *   Bucket name: sales-registers
+ *   Public: false
+ * ============================================================
+ */
+
+// ── Supabase credentials (fill these in) ─────────────────────
+const SUPABASE_URL  = 'https://xrzvbegzlwheueomemax.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhyenZiZWd6bHdoZXVlb21lbWF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNjU2NzMsImV4cCI6MjA5Njc0MTY3M30.NyrOeaIZVfdU_hTPegQ0J5sXAyf5FdD1IudCnAKEvNc';
+const STORAGE_BUCKET = 'sales-registers';
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─────────────────────────────────────────────────────────────
+// EXISTING DASHBOARD DATA & LOGIC (untouched)
+// ─────────────────────────────────────────────────────────────
+const DUMMY={"months": ["Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"], "ledgers": [{"name": "Sales - Airbnb", "stmt": "P&L", "cat": "Revenue", "sub": "Airbnb", "sign": 1, "vals": [-980000, -1975000, -2985000, -4010000, -5050000, -6105000, -7175000, -8260000, -9360000, -10475000, -11605000, -12750000]}, {"name": "Sales - MakeMyTrip", "stmt": "P&L", "cat": "Revenue", "sub": "MakeMyTrip", "sign": 1, "vals": [-230000, -464000, -702000, -944000, -1190000, -1440000, -1694000, -1952000, -2214000, -2480000, -2750000, -3024000]}, {"name": "Sales - Direct", "stmt": "P&L", "cat": "Revenue", "sub": "Direct Sales", "sign": 1, "vals": [-610000, -1235000, -1875000, -2530000, -3200000, -3885000, -4585000, -5300000, -6030000, -6775000, -7535000, -8310000]}, {"name": "Sales - Other Rental", "stmt": "P&L", "cat": "Revenue", "sub": "Other Rental Sales", "sign": 1, "vals": [-120000, -244000, -372000, -504000, -640000, -780000, -924000, -1072000, -1224000, -1380000, -1540000, -1704000]}, {"name": "Interest Income", "stmt": "P&L", "cat": "Other Income", "sub": "Interest Income", "sign": 1, "vals": [-8000, -16200, -24600, -33200, -42000, -51000, -60200, -69600, -79200, -89000, -99000, -109200]}, {"name": "Linen & Housekeeping", "stmt": "P&L", "cat": "Direct Cost", "sub": "Housekeeping", "sign": 1, "vals": [140000, 283000, 429000, 578000, 730000, 885000, 1043000, 1204000, 1368000, 1535000, 1705000, 1878000]}, {"name": "OTA Commission", "stmt": "P&L", "cat": "Direct Cost", "sub": "OTA Commission", "sign": 1, "vals": [180000, 364000, 552000, 744000, 940000, 1140000, 1344000, 1552000, 1764000, 1980000, 2200000, 2424000]}, {"name": "Salaries & Wages", "stmt": "P&L", "cat": "Employee Cost", "sub": "Salaries", "sign": 1, "vals": [320000, 645000, 975000, 1310000, 1650000, 1995000, 2345000, 2700000, 3060000, 3425000, 3795000, 4170000]}, {"name": "Rent", "stmt": "P&L", "cat": "Other Expenses", "sub": "Rent", "sign": 1, "vals": [200000, 400000, 600000, 800000, 1000000, 1200000, 1410000, 1620000, 1830000, 2040000, 2250000, 2460000]}, {"name": "Power & Fuel", "stmt": "P&L", "cat": "Other Expenses", "sub": "Power & Fuel", "sign": 1, "vals": [60000, 122000, 186000, 252000, 320000, 390000, 462000, 536000, 612000, 690000, 770000, 852000]}, {"name": "Repairs & Maintenance", "stmt": "P&L", "cat": "Other Expenses", "sub": "Repairs & Maintenance", "sign": 1, "vals": [40000, 81000, 123000, 166000, 210000, 255000, 301000, 348000, 396000, 445000, 495000, 546000]}, {"name": "Bank Charges", "stmt": "P&L", "cat": "Other Expenses", "sub": "Bank Charges", "sign": 1, "vals": [5000, 10100, 15300, 20600, 26000, 31500, 37100, 42800, 48600, 54500, 60500, 66600]}, {"name": "Interest on Loan", "stmt": "P&L", "cat": "Finance Cost", "sub": "Interest", "sign": 1, "vals": [55000, 109000, 162000, 214000, 265000, 315000, 364000, 412000, 459000, 505000, 550000, 594000]}, {"name": "Depreciation", "stmt": "P&L", "cat": "Depreciation", "sub": "Depreciation", "sign": 1, "vals": [90000, 180000, 270000, 360000, 450000, 540000, 635000, 730000, 825000, 920000, 1015000, 1110000]}, {"name": "GST Expense (RCM/Blocked ITC)", "stmt": "P&L", "cat": "GST Expense", "sub": "GST Expense", "sign": 1, "vals": [6000, 12200, 18600, 25200, 32000, 39000, 46200, 53600, 61200, 69000, 77000, 85200]}, {"name": "Building", "stmt": "BS", "cat": "Fixed Assets", "sub": "Building", "sign": 1, "vals": [5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000, 5000000]}, {"name": "Furniture & Fixtures", "stmt": "BS", "cat": "Fixed Assets", "sub": "Furniture & Fixtures", "sign": 1, "vals": [2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000, 2400000]}, {"name": "Accumulated Depreciation", "stmt": "BS", "cat": "Fixed Assets", "sub": "Accumulated Depreciation", "sign": 1, "vals": [-90000, -180000, -270000, -360000, -450000, -540000, -635000, -730000, -825000, -920000, -1015000, -1110000]}, {"name": "Trade Receivables", "stmt": "BS", "cat": "Current Assets", "sub": "Trade Receivables", "sign": 1, "vals": [460000, 470000, 480000, 490000, 500000, 510000, 520000, 530000, 540000, 550000, 560000, 570000]}, {"name": "Cash & Bank", "stmt": "BS", "cat": "Current Assets", "sub": "Cash & Bank", "sign": 1, "vals": [2211500, 3228800, 4271900, 5340800, 6435500, 7556000, 8692300, 9854400, 11042300, 12256000, 13495500, 14760800]}, {"name": "GST Input Credit", "stmt": "BS", "cat": "Current Assets", "sub": "GST Input Credit", "sign": 1, "vals": [62000, 64000, 66000, 68000, 70000, 72000, 74000, 76000, 78000, 80000, 82000, 84000]}, {"name": "Share Capital", "stmt": "BS", "cat": "Equity", "sub": "Share Capital", "sign": 1, "vals": [-5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000, -5000000]}, {"name": "Reserves & Surplus", "stmt": "BS", "cat": "Equity", "sub": "Reserves & Surplus", "sign": 1, "vals": [-1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000, -1200000]}, {"name": "Term Loan", "stmt": "BS", "cat": "Non-Current Liabilities", "sub": "Term Loan", "sign": 1, "vals": [-2360000, -2320000, -2280000, -2240000, -2200000, -2160000, -2120000, -2080000, -2040000, -2000000, -1960000, -1920000]}, {"name": "Trade Payables", "stmt": "BS", "cat": "Current Liabilities", "sub": "Trade Payables", "sign": 1, "vals": [-384000, -388000, -392000, -396000, -400000, -404000, -408000, -412000, -416000, -420000, -424000, -428000]}, {"name": "GST Payable", "stmt": "BS", "cat": "Current Liabilities", "sub": "GST Payable", "sign": 1, "vals": [-225000, -323900, -424700, -527400, -632000, -738500, -846900, -957200, -1069400, -1183500, -1299500, -1417400]}, {"name": "TDS Payable", "stmt": "BS", "cat": "Current Liabilities", "sub": "TDS Payable", "sign": 1, "vals": [-22500, -23000, -23500, -24000, -24500, -25000, -25500, -26000, -26500, -27000, -27500, -28000]}]};
+let DATA=DUMMY, charts={}, curView='sales';
+const COLORS=['#d65a3c','#3f7cbf','#2f9488','#b8902f','#7a6cc4','#5b9bd5','#e0a458','#6aa84f','#a0556b','#4a8da8'];
+const CH_COLOR={Airbnb:'#d65a3c',MakeMyTrip:'#3f7cbf','Direct Sales':'#2f9488','Other Rental Sales':'#b8902f'};
+const fmt=n=>{const s=n<0?'-':'';n=Math.abs(Math.round(n));return s+'₹'+n.toLocaleString('en-IN');};
+const fmtCr=n=>{const s=n<0?'-':'';return s+'₹'+(Math.abs(n)/1e7).toFixed(2)+' Cr';};
+const fmtL=n=>+(n/1e5).toFixed(1);
+const pct=(a,b)=>b? (a/b*100).toFixed(1)+'%':'-';
+
+/* ---------- period helpers ---------- */
+const QUARTERS=[['Q1',[0,1,2]],['Q2',[3,4,5]],['Q3',[6,7,8]],['Q4',[9,10,11]]];
+function periodOptions(){
+  const mode=document.getElementById('period').value;
+  const pick=document.getElementById('periodPick');
+  let opts='';
+  if(mode==='M') opts=DATA.months.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  else if(mode==='Q') opts=QUARTERS.map((q,i)=>`<option value="${i}">${q[0]} (${DATA.months[q[1][0]]}–${DATA.months[q[1][2]]})</option>`).join('');
+  else opts=`<option value="0">Full FY 2026-27</option>`;
+  pick.innerHTML=opts; pick.value='0';
+}
+function activeMonths(){
+  const mode=document.getElementById('period').value;
+  let idx=+document.getElementById('periodPick').value; if(isNaN(idx))idx=0;
+  if(mode==='M'){ if(idx<0||idx>=DATA.months.length)idx=0; return [idx]; }
+  if(mode==='Q'){ if(idx<0||idx>=QUARTERS.length)idx=0; return QUARTERS[idx][1].filter(m=>m<DATA.months.length); }
+  return DATA.months.map((_,i)=>i);
+}
+function periodLabel(){
+  const mode=document.getElementById('period').value;
+  let idx=+document.getElementById('periodPick').value; if(isNaN(idx))idx=0;
+  if(mode==='M'){ if(idx<0||idx>=DATA.months.length)idx=0; return DATA.months[idx]; }
+  if(mode==='Q'){ if(idx<0||idx>=QUARTERS.length)idx=0; return QUARTERS[idx][0]+' FY26-27'; }
+  return 'FY 2026-27';
+}
+
+/* ---------- aggregation ---------- */
+function pnlSum(filterFn){
+  const ms=activeMonths();
+  let t=0;
+  DATA.ledgers.forEach(l=>{ if(l.stmt==='P&L' && filterFn(l)) ms.forEach(m=>t+=(l.flow[m]||0)*l.sign); });
+  return t;
+}
+function bsClose(filterFn){
+  const ms=activeMonths(); const last=ms[ms.length-1];
+  let t=0;
+  DATA.ledgers.forEach(l=>{ if(l.stmt==='BS' && filterFn(l)) t+=(l.vals[last]||0)*l.sign; });
+  return t;
+}
+const revenue   =()=> -pnlSum(l=>l.cat==='Revenue');
+const otherInc  =()=> -pnlSum(l=>l.cat==='Other Income');
+const catExp     =c=> pnlSum(l=>l.cat===c);
+const directCost =()=> catExp('Direct Cost');
+const empCost    =()=> catExp('Employee Cost');
+const otherExp   =()=> catExp('Other Expenses');
+const finCost    =()=> catExp('Finance Cost');
+const deprec     =()=> catExp('Depreciation');
+const gstExp     =()=> catExp('GST Expense');
+const totalExp   =()=> directCost()+empCost()+otherExp()+gstExp()+finCost()+deprec();
+const pbt        =()=> revenue()+otherInc()-totalExp();
+const taxRate=0.25;
+const taxExp     =()=> Math.max(0,pbt())*taxRate;
+const pat        =()=> pbt()-taxExp();
+
+function channelRevenue(){
+  const ms=activeMonths(); const out={};
+  DATA.ledgers.filter(l=>l.cat==='Revenue').forEach(l=>{
+    let v=0; ms.forEach(m=>v+=-(l.flow[m]||0)*l.sign); out[l.sub]=(out[l.sub]||0)+v;
+  });
+  return out;
+}
+function monthlySeries(kind){
+  return DATA.months.map((_,m)=>{
+    let rev=0,exp=0;
+    DATA.ledgers.forEach(l=>{
+      if(l.stmt!=='P&L')return;
+      const v=(l.flow[m]||0)*l.sign;
+      if(l.cat==='Revenue'||l.cat==='Other Income') rev+=-v; else exp+=v;
+    });
+    if(kind==='revenue')return rev; if(kind==='expense')return exp; return rev-exp;
+  });
+}
+
+/* ---------- file loading ---------- */
+document.getElementById('upload').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  document.getElementById('status').textContent='Reading '+f.name+'…';
+  const rd=new FileReader();
+  rd.onload=ev=>{ try{ DATA=parseTB(new Uint8Array(ev.target.result)); periodOptions(); renderAll();
+    document.getElementById('status').textContent='Loaded '+f.name; }
+    catch(err){ document.getElementById('status').textContent='Error: '+err.message; console.error(err);} };
+  rd.readAsArrayBuffer(f);
+};
+function normalize(data){
+  const n=data.months.length;
+  data.ledgers=data.ledgers.filter(l=>Array.isArray(l.vals)&&l.vals.length>0);
+  data.ledgers.forEach(l=>{
+    while(l.vals.length<n) l.vals.push(l.vals[l.vals.length-1]||0);
+    if(l.stmt==='P&L'){
+      l.flow=l.vals.map((v,i)=> i===0? (v||0) : ((v||0)-(l.vals[i-1]||0)));
+    } else { l.flow=l.vals.slice(); }
+  });
+  return data;
+}
+function cellRows(ws,headerRow){const a=XLSX.utils.sheet_to_json(ws,{header:1,raw:true});return {a};}
+function findHeader(rows,keyword){ // returns {ri, ci} of the cell containing keyword
+  for(let i=0;i<Math.min(rows.length,12);i++){const r=rows[i]||[];
+    for(let c=0;c<r.length;c++){ if(String(r[c]||'').trim().toLowerCase()===keyword){return {ri:i,ci:c};} }}
+  return null;
+}
+const MONTH_RE=/^[A-Za-z]{3}[-\s]?\d{2}$/;
+function parseTB(bytes){
+  const wb=XLSX.read(bytes,{type:'array',cellDates:false});
+  if(!wb.Sheets['TB']||!wb.Sheets['Mapping']) throw new Error('Need TB and Mapping tabs');
+  const ma=XLSX.utils.sheet_to_json(wb.Sheets['Mapping'],{header:1,raw:true});
+  const mh=findHeader(ma,'ledger name')||findHeader(ma,'ledger'); if(!mh) throw new Error('Mapping: no "Ledger Name" header');
+  const mLed=mh.ci, mStmt=mh.ci+1, mCat=mh.ci+2, mSub=mh.ci+3, mSign=mh.ci+4;
+  const map={};
+  for(let i=mh.ri+1;i<ma.length;i++){const r=ma[i];if(!r||!r[mLed])continue;
+    map[String(r[mLed]).trim()]={stmt:String(r[mStmt]||'').trim(),cat:String(r[mCat]||'').trim(),sub:String(r[mSub]||'').trim(),sign:Number(r[mSign])||1};}
+  const ta=XLSX.utils.sheet_to_json(wb.Sheets['TB'],{header:1,raw:true});
+  const th=findHeader(ta,'ledger name')||findHeader(ta,'ledger'); if(!th) throw new Error('TB: no "Ledger Name" header');
+  const ledCol=th.ci;
+  const hdr=ta[th.ri]||[]; const monthCols=[]; const months=[];
+  for(let c=ledCol+1;c<hdr.length;c++){ const h=String(hdr[c]||'').trim(); if(MONTH_RE.test(h)){monthCols.push(c);months.push(h);} }
+  if(!months.length) throw new Error('TB: no month columns (e.g. Apr-26) found in header');
+  const ledgers=[];
+  for(let i=th.ri+1;i<ta.length;i++){const r=ta[i];if(!r||r[ledCol]==null)continue;
+    const name=String(r[ledCol]).trim(); if(!name||name.toUpperCase().startsWith('CHECK')||name.toUpperCase().startsWith('SUM'))break;
+    const m=map[name]; if(!m)continue;
+    const vals=monthCols.map(c=>{const v=parseFloat(r[c]);return isNaN(v)?0:v;});
+    ledgers.push({name,stmt:m.stmt,cat:m.cat,sub:m.sub,sign:m.sign,vals});}
+  if(!ledgers.length) throw new Error('No mapped ledgers found — check that TB ledger names match the Mapping tab');
+  return normalize({months,ledgers});
+}
+
+/* ---------- tab switching ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); curView=t.dataset.v;
+  document.getElementById('view-'+curView).classList.add('active');
+  if(curView==='sales-register'){
+    loadHistory();
+  } else {
+    renderAll();
+  }
+});
+document.getElementById('period').onchange=()=>{periodOptions();renderAll();};
+document.getElementById('periodPick').onchange=renderAll;
+
+/* ---------- KPI helper ---------- */
+function kpiHTML(items){return items.map(k=>`<div class="kpi"><div class="lbl">${k.l}</div><div class="val ${k.cls||''}">${k.v}</div><div class="note">${k.n||''}</div></div>`).join('');}
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id];}}
+function baseChart(){Chart.defaults.color='#6b7c93';Chart.defaults.font.family="'Segoe UI',sans-serif";Chart.defaults.font.size=11;}
+const GRID='rgba(31,58,95,.08)';
+
+/* ---------- renderers ---------- */
+function renderSales(){
+  const ch=channelRevenue(); const names=Object.keys(ch);
+  const tot=names.reduce((s,n)=>s+ch[n],0)||1;
+  document.getElementById('salesKpis').innerHTML=kpiHTML([
+    {l:'Total Revenue',v:fmtCr(tot),n:periodLabel()},
+    {l:'Channels',v:String(names.length),n:'active'},
+    {l:'Top Channel',v:names.sort((a,b)=>ch[b]-ch[a])[0]||'-',n:fmt(ch[names[0]]||0)},
+    {l:'Avg / Channel',v:fmtCr(tot/(names.length||1)),n:periodLabel()},
+  ]);
+  document.getElementById('salesTrendCap').textContent='Monthly revenue by channel (₹)';
+  document.getElementById('salesTblCap').textContent='Period: '+periodLabel();
+  baseChart();
+  destroyChart('salesTrend');
+  const subs=[...new Set(DATA.ledgers.filter(l=>l.cat==='Revenue').map(l=>l.sub))];
+  charts.salesTrend=new Chart(document.getElementById('salesTrend'),{type:'line',
+    data:{labels:DATA.months,datasets:subs.map((s,i)=>({label:s,
+      data:DATA.months.map((_,m)=>DATA.ledgers.filter(l=>l.sub===s&&l.cat==='Revenue').reduce((a,l)=>a+(-(l.flow[m]||0)*l.sign),0)),
+      borderColor:CH_COLOR[s]||COLORS[i],backgroundColor:(CH_COLOR[s]||COLORS[i])+'33',fill:true,tension:.35,borderWidth:2,pointRadius:0}))},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:8,padding:10}},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fmt(x.raw)}}},
+      scales:{x:{grid:{display:false}},y:{stacked:true,grid:{color:GRID},ticks:{callback:v=>'₹'+(v/1e5).toFixed(0)+'L'}}}}});
+  destroyChart('salesDonut');
+  charts.salesDonut=new Chart(document.getElementById('salesDonut'),{type:'doughnut',
+    data:{labels:names,datasets:[{data:names.map(n=>ch[n]),backgroundColor:names.map((n,i)=>CH_COLOR[n]||COLORS[i]),borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:8}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,tot)+')'}}}}});
+  const tb=document.querySelector('#salesTbl tbody');
+  tb.innerHTML=names.map((n,i)=>`<tr><td><span class="dot" style="background:${CH_COLOR[n]||COLORS[i]}"></span>${n}</td><td>${fmt(ch[n])}</td><td>${pct(ch[n],tot)}</td></tr>`).join('');
+  document.querySelector('#salesTbl tfoot').innerHTML=`<tr class="tot"><td>TOTAL</td><td>${fmt(tot)}</td><td>100%</td></tr>`;
+}
+
+function renderPnl(){
+  const rev=revenue(),oi=otherInc(),dc=directCost(),ec=empCost(),oe=otherExp(),gx=gstExp(),fc=finCost(),dep=deprec();
+  const te=dc+ec+oe+gx+fc+dep,p=pbt(),tx=taxExp(),np=pat();
+  document.getElementById('pnlKpis').innerHTML=kpiHTML([
+    {l:'Revenue',v:fmtCr(rev),n:periodLabel()},
+    {l:'EBITDA',v:fmtCr(rev+oi-dc-ec-oe-gx),n:'before int & dep'},
+    {l:'PBT',v:fmtCr(p),n:periodLabel(),cls:p>=0?'pos':'neg'},
+    {l:'Net Profit',v:fmtCr(np),n:'after tax @25%',cls:np>=0?'pos':'neg'},
+  ]);
+  document.getElementById('pnlTrendCap').textContent='Monthly (₹)';
+  document.getElementById('pnlTblCap').textContent='Period: '+periodLabel();
+  baseChart();
+  destroyChart('pnlTrend');
+  charts.pnlTrend=new Chart(document.getElementById('pnlTrend'),{type:'bar',
+    data:{labels:DATA.months,datasets:[
+      {label:'Revenue',data:monthlySeries('revenue'),backgroundColor:'#3f7cbf',borderRadius:5,maxBarThickness:14},
+      {label:'Expenses',data:monthlySeries('expense'),backgroundColor:'#d65a3c',borderRadius:5,maxBarThickness:14},
+      {type:'line',label:'Profit',data:monthlySeries('profit'),borderColor:'#2f9488',backgroundColor:'#2f948833',borderWidth:2,tension:.35,pointRadius:0,fill:true}]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:8,padding:10}},tooltip:{callbacks:{label:x=>x.dataset.label+': '+fmt(x.raw)}}},
+      scales:{x:{grid:{display:false}},y:{grid:{color:GRID},ticks:{callback:v=>'₹'+(v/1e5).toFixed(0)+'L'}}}}});
+  destroyChart('pnlDonut');
+  const costs=[['Direct Cost',dc],['Employee Cost',ec],['Other Expenses',oe],['GST Expense',gx],['Finance Cost',fc],['Depreciation',dep]].filter(c=>c[1]>0);
+  charts.pnlDonut=new Chart(document.getElementById('pnlDonut'),{type:'doughnut',
+    data:{labels:costs.map(c=>c[0]),datasets:[{data:costs.map(c=>c[1]),backgroundColor:costs.map((c,i)=>COLORS[i]),borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:7,font:{size:10}}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,te)+')'}}}}});
+  const rows=[
+    ['grp','Revenue from Operations',rev,pct(rev,rev)],
+    ['sub','Other Income',oi,pct(oi,rev)],
+    ['grp','Total Income',rev+oi,pct(rev+oi,rev)],
+    ['sub','Direct Cost',-dc,pct(dc,rev)],
+    ['sub','Employee Cost',-ec,pct(ec,rev)],
+    ['sub','Other Expenses',-oe,pct(oe,rev)],
+    ...(gx?[['sub','GST Expense',-gx,pct(gx,rev)]]:[]),
+    ['grp','EBITDA',rev+oi-dc-ec-oe-gx,pct(rev+oi-dc-ec-oe-gx,rev)],
+    ['sub','Finance Cost',-fc,pct(fc,rev)],
+    ['sub','Depreciation',-dep,pct(dep,rev)],
+    ['grp','Profit Before Tax',p,pct(p,rev)],
+    ['sub','Tax @ 25%',-tx,pct(tx,rev)],
+    ['tot','Net Profit',np,pct(np,rev)],
+  ];
+  document.querySelector('#pnlTbl tbody').innerHTML=rows.map(([cls,lbl,amt,pc])=>
+    `<tr class="${cls}"><td>${lbl}</td><td class="${amt<0?'neg':''}">${fmt(amt)}</td><td>${pc}</td></tr>`).join('');
+}
+
+function cumPnlProfitTo(lastMonth){
+  let rev=0,exp=0;
+  DATA.ledgers.forEach(l=>{ if(l.stmt!=='P&L')return;
+    for(let m=0;m<=lastMonth;m++){ const v=(l.flow[m]||0)*l.sign;
+      if(l.cat==='Revenue'||l.cat==='Other Income') rev+=-v; else exp+=v; } });
+  return rev-exp;
+}
+function renderBs(){
+  const ms=activeMonths(); const lastM=ms[ms.length-1];
+  const fa=bsClose(l=>l.cat==='Fixed Assets');
+  const ca=bsClose(l=>l.cat==='Current Assets');
+  const nca=bsClose(l=>l.cat==='Non-Current Assets');
+  const totAssets=fa+ca+nca;
+  const cyProfit=cumPnlProfitTo(lastM);
+  const eq=-bsClose(l=>l.cat==='Equity')+cyProfit;
+  const ncl=-bsClose(l=>l.cat==='Non-Current Liabilities');
+  const cl=-bsClose(l=>l.cat==='Current Liabilities');
+  const totEL=eq+ncl+cl;
+  document.getElementById('bsKpis').innerHTML=kpiHTML([
+    {l:'Total Assets',v:fmtCr(totAssets),n:'as at '+periodLabel()},
+    {l:'Net Worth',v:fmtCr(eq),n:'equity'},
+    {l:'Total Debt',v:fmtCr(ncl+cl),n:'liabilities'},
+    {l:'Balance Check',v:Math.abs(totAssets-totEL)<1?'✓ Tallied':fmt(totAssets-totEL),n:'A = E+L',cls:Math.abs(totAssets-totEL)<1?'pos':'neg'},
+  ]);
+  document.getElementById('bsTblCap').textContent='As at '+periodLabel();
+  baseChart();
+  destroyChart('bsAssets');
+  charts.bsAssets=new Chart(document.getElementById('bsAssets'),{type:'doughnut',
+    data:{labels:['Fixed Assets','Current Assets','Non-Current Assets'].filter((_,i)=>[fa,ca,nca][i]!==0),
+      datasets:[{data:[fa,ca,nca].filter(v=>v!==0),backgroundColor:COLORS,borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:8}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,totAssets)+')'}}}}});
+  destroyChart('bsLiab');
+  charts.bsLiab=new Chart(document.getElementById('bsLiab'),{type:'doughnut',
+    data:{labels:['Equity','Non-Current Liab','Current Liab'],datasets:[{data:[eq,ncl,cl],backgroundColor:['#2f9488','#7a6cc4','#d65a3c'],borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:8}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,totEL)+')'}}}}});
+  const rows=[
+    ['grp','ASSETS','',''],['sub','Fixed Assets',fa],['sub','Current Assets',ca],
+    ...(nca?[['sub','Non-Current Assets',nca]]:[]),
+    ['tot','Total Assets',totAssets],
+    ['grp','EQUITY & LIABILITIES','',''],
+    ['sub','Equity (capital + opening reserves)',eq-cyProfit],
+    ['sub','Current-Year Profit',cyProfit],
+    ['sub','Non-Current Liabilities',ncl],['sub','Current Liabilities',cl],
+    ['tot','Total Equity & Liabilities',totEL],
+  ];
+  document.querySelector('#bsTbl tbody').innerHTML=rows.map(([cls,lbl,amt])=>
+    `<tr class="${cls}"><td>${lbl}</td><td>${amt===''?'':fmt(amt)}</td></tr>`).join('');
+  const cr=ca/cl, de=(ncl+cl)/eq, roe=pat()/eq*100, equityRatio=eq/totAssets*100;
+  const ratios=[['Current Ratio',cr.toFixed(2)+'x'],['Debt–Equity',de.toFixed(2)+'x'],
+    ['Equity Ratio',equityRatio.toFixed(1)+'%'],['Return on Equity (period)',roe.toFixed(1)+'%']];
+  document.querySelector('#ratioTbl tbody').innerHTML=ratios.map(([l,v])=>`<tr><td>${l}</td><td>${v}</td></tr>`).join('');
+}
+
+function renderTax(){
+  const rev=revenue();
+  const gx=gstExp();
+  const tx=taxExp();
+  const totalTax=gx+tx;
+  document.getElementById('taxKpis').innerHTML=kpiHTML([
+    {l:'Total Tax in P&L',v:fmtCr(totalTax),n:pct(totalTax,rev)+' of revenue'},
+    {l:'Income Tax @25%',v:fmtCr(tx),n:periodLabel()},
+    {l:'Effective Tax Rate',v:rev?pct(tx,rev):'-',n:'income tax ÷ revenue'},
+    {l:'GST Charged to P&L',v:rev?pct(gx,rev):'-',n:'GST expense ÷ revenue'},
+  ]);
+  document.getElementById('taxTrendCap').textContent='Monthly tax in P&L as % of revenue';
+  document.getElementById('taxTblCap').textContent='Period: '+periodLabel();
+  baseChart();
+  destroyChart('taxTrend');
+  const taxRatio=DATA.months.map((_,m)=>{
+    let r=0,gxm=0,exp=0;
+    DATA.ledgers.forEach(l=>{ if(l.stmt!=='P&L')return; const v=(l.flow[m]||0)*l.sign;
+      if(l.cat==='Revenue'||l.cat==='Other Income') r+=-v;
+      else { exp+=v; if(l.cat==='GST Expense') gxm+=v; } });
+    const pbtM=r-exp; const txM=Math.max(0,pbtM)*taxRate;
+    return r? +(((gxm+txM)/r)*100).toFixed(2):0;
+  });
+  charts.taxTrend=new Chart(document.getElementById('taxTrend'),{type:'line',
+    data:{labels:DATA.months,datasets:[{label:'Tax in P&L % of revenue',data:taxRatio,borderColor:'#b8902f',backgroundColor:'#b8902f33',fill:true,tension:.35,borderWidth:2,pointRadius:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>x.raw+'%'}}},
+      scales:{x:{grid:{display:false}},y:{grid:{color:GRID},ticks:{callback:v=>v+'%'}}}}});
+  destroyChart('taxDonut');
+  charts.taxDonut=new Chart(document.getElementById('taxDonut'),{type:'doughnut',
+    data:{labels:['GST Expense (P&L)','Income Tax'],datasets:[{data:[gx,tx],backgroundColor:['#d65a3c','#3f7cbf'],borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:8}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,totalTax)+')'}}}}});
+  const rows=[
+    ['grp','TAX CHARGED TO P&L','',''],
+    ['sub','GST Expense (RCM / blocked ITC / late fees)',gx,pct(gx,rev)],
+    ['sub','Income Tax @25%',tx,pct(tx,rev)],
+    ['tot','Total Tax in P&L',totalTax,pct(totalTax,rev)],
+  ];
+  document.querySelector('#taxTbl tbody').innerHTML=rows.map(([cls,lbl,amt,pc])=>
+    `<tr class="${cls}"><td>${lbl}</td><td>${amt===''?'':fmt(amt)}</td><td>${pc||''}</td></tr>`).join('');
+}
+
+function renderCost(){
+  const ms=activeMonths(); const rev=revenue();
+  const isCost=l=> l.stmt==='P&L' && l.cat!=='Revenue' && l.cat!=='Other Income';
+  const ledgerAmt={};
+  DATA.ledgers.filter(isCost).forEach(l=>{ let v=0; ms.forEach(m=>v+=(l.flow[m]||0)*l.sign); ledgerAmt[l.name]=(ledgerAmt[l.name]||0)+v; });
+  const ranked=Object.entries(ledgerAmt).filter(([n,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const totalCost=ranked.reduce((s,[,v])=>s+v,0)||1;
+  const subAmt={};
+  DATA.ledgers.filter(isCost).forEach(l=>{ let v=0; ms.forEach(m=>v+=(l.flow[m]||0)*l.sign); subAmt[l.sub]=(subAmt[l.sub]||0)+v; });
+  const subRanked=Object.entries(subAmt).filter(([n,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('costKpis').innerHTML=kpiHTML([
+    {l:'Total Cost',v:fmtCr(totalCost),n:pct(totalCost,rev)+' of revenue'},
+    {l:'Cost Ledgers',v:String(ranked.length),n:'with spend'},
+    {l:'Largest Cost',v:ranked[0]?ranked[0][0]:'-',n:ranked[0]?fmt(ranked[0][1]):''},
+    {l:'Top 3 Share',v:pct(ranked.slice(0,3).reduce((s,[,v])=>s+v,0),totalCost),n:'of total cost'},
+  ]);
+  document.getElementById('costRankCap').textContent='Period: '+periodLabel();
+  document.getElementById('costTblCap').textContent='Period: '+periodLabel();
+  document.getElementById('costSubCap').textContent='Period: '+periodLabel();
+  baseChart();
+  destroyChart('costRank');
+  const top=ranked.slice(0,10);
+  charts.costRank=new Chart(document.getElementById('costRank'),{type:'bar',
+    data:{labels:top.map(x=>x[0]),datasets:[{data:top.map(x=>fmtL(x[1])),backgroundColor:top.map((x,i)=>COLORS[i%COLORS.length]),borderRadius:6,maxBarThickness:22}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:x=>'₹'+x.raw+'L ('+pct(top[x.dataIndex][1],rev)+' of rev)'}}},
+      scales:{x:{grid:{color:GRID},ticks:{callback:v=>'₹'+v+'L'}},y:{grid:{display:false}}}}});
+  destroyChart('costDonut');
+  charts.costDonut=new Chart(document.getElementById('costDonut'),{type:'doughnut',
+    data:{labels:subRanked.map(x=>x[0]),datasets:[{data:subRanked.map(x=>x[1]),backgroundColor:subRanked.map((x,i)=>COLORS[i%COLORS.length]),borderColor:'#fff',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:6,font:{size:10}}},
+      tooltip:{callbacks:{label:x=>x.label+': '+fmt(x.raw)+' ('+pct(x.raw,totalCost)+')'}}}}});
+  document.querySelector('#costTbl tbody').innerHTML=ranked.map(([n,v],i)=>
+    `<tr><td><span class="dot" style="background:${COLORS[i%COLORS.length]}"></span>${n}</td><td>${fmt(v)}</td><td>${pct(v,rev)}</td></tr>`).join('');
+  document.querySelector('#costTbl tfoot').innerHTML=`<tr class="tot"><td>TOTAL</td><td>${fmt(totalCost)}</td><td>${pct(totalCost,rev)}</td></tr>`;
+  document.querySelector('#costSubTbl tbody').innerHTML=subRanked.map(([n,v],i)=>
+    `<tr><td><span class="dot" style="background:${COLORS[i%COLORS.length]}"></span>${n}</td><td>${fmt(v)}</td><td>${pct(v,rev)}</td></tr>`).join('');
+  document.querySelector('#costSubTbl tfoot').innerHTML=`<tr class="tot"><td>TOTAL</td><td>${fmt(totalCost)}</td><td>${pct(totalCost,rev)}</td></tr>`;
+}
+
+function renderAll(){
+  if(curView==='sales')renderSales();
+  else if(curView==='pnl')renderPnl();
+  else if(curView==='bs')renderBs();
+  else if(curView==='cost')renderCost();
+  else if(curView==='tax')renderTax();
+}
+
+/* init */
+periodOptions(); renderAll();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SALES REGISTER — Processing Pipeline
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a cell value into a JS Date.
+ * Handles Excel serial numbers and common string formats.
+ * @param {number|string|null} val
+ * @returns {Date|null}
+ */
+function parseDate(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') {
+    // Excel serial date (days since 1900-01-01, with Lotus 1-2-3 leap-year bug)
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return d;
+  }
+  if (typeof val === 'string') {
+    val = val.trim();
+    if (!val) return null;
+    // Try splitting on / or -
+    const parts = val.split(/[\/\-]/);
+    if (parts.length === 3) {
+      const a = parseInt(parts[0], 10);
+      const b = parseInt(parts[1], 10);
+      const c = parseInt(parts[2], 10);
+      // YYYY-MM-DD
+      if (a > 1900) return new Date(a, b - 1, c);
+      // MM/DD/YYYY or MM-DD-YYYY
+      if (c > 1900) return new Date(c, a - 1, b);
+    }
+    return new Date(val);
+  }
+  return null;
+}
+
+/**
+ * Format a Date as DD/MM/YYYY.
+ * @param {Date|null} d
+ * @returns {string}
+ */
+function formatDate(d) {
+  if (!d || isNaN(d.getTime())) return '';
+  return (
+    String(d.getDate()).padStart(2, '0') + '/' +
+    String(d.getMonth() + 1).padStart(2, '0') + '/' +
+    d.getFullYear()
+  );
+}
+
+/**
+ * Parse a cell value to a float, stripping commas/whitespace.
+ * @param {*} val
+ * @returns {number}
+ */
+function parseNum(val) {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  return parseFloat(String(val).replace(/[,\s]/g, '')) || 0;
+}
+
+/**
+ * Read an ArrayBuffer as an XLSX workbook and return rows as an array of objects.
+ * @param {ArrayBuffer} buffer
+ * @param {string} [sheetName] - Optional sheet name; defaults to first sheet.
+ * @returns {Array<Object>}
+ */
+function readXlsxRows(buffer, sheetName) {
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true });
+  const sheet = sheetName ? wb.Sheets[sheetName] : wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error('Sheet not found: ' + (sheetName || 'first sheet'));
+  return XLSX.utils.sheet_to_json(sheet, { raw: true, defval: '' });
+}
+
+/**
+ * Read a CSV ArrayBuffer and return rows as array of objects.
+ * Uses XLSX (treats CSV as a spreadsheet).
+ * @param {ArrayBuffer} buffer
+ * @returns {Array<Object>}
+ */
+function readCsvRows(buffer) {
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', raw: true });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: '' });
+  // Trim all values (strip leading/trailing whitespace and tabs)
+  return rows.map(row => {
+    const clean = {};
+    for (const key of Object.keys(row)) {
+      const cleanKey = key.trim().replace(/^\t+/, '');
+      clean[cleanKey] = typeof row[key] === 'string' ? row[key].replace(/^\t+/, '').trim() : row[key];
+    }
+    return clean;
+  });
+}
+
+/**
+ * Read a File object into an ArrayBuffer.
+ * @param {File} file
+ * @returns {Promise<ArrayBuffer>}
+ */
+function readFileBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Failed to read file: ' + file.name));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── AIRBNB PROCESSING ────────────────────────────────────────────────────────
+
+/**
+ * Process all Airbnb weekly export files.
+ * Returns { airbnbRows, airbnbPayoutRows }
+ * @param {File[]} files
+ * @returns {Promise<{airbnbRows: Array, airbnbPayoutRows: Array}>}
+ */
+async function processAirbnb(files) {
+  // Collect all raw rows across all weekly files
+  const allRaw = [];
+  for (const file of files) {
+    const buf = await readFileBuffer(file);
+    const rows = readXlsxRows(buf);
+    allRaw.push(...rows);
+  }
+
+  // Separate payout rows
+  const payoutRows = allRaw.filter(r => String(r['Type'] || '').trim() === 'Payout');
+  const nonPayoutRows = allRaw.filter(r => String(r['Type'] || '').trim() !== 'Payout');
+
+  // Group non-payout rows by Confirmation Code
+  const grouped = {};
+  for (const row of nonPayoutRows) {
+    const code = String(row['Confirmation Code'] || '').trim();
+    if (!code) continue;
+    if (!grouped[code]) grouped[code] = [];
+    grouped[code].push(row);
+  }
+
+  const airbnbRows = [];
+
+  for (const [code, rows] of Object.entries(grouped)) {
+    // Classify rows by Type
+    const reservationRows = rows.filter(r => String(r['Type'] || '').trim() === 'Reservation');
+    const hostTaxRows     = rows.filter(r => String(r['Type'] || '').trim() === 'Host-Remitted Tax');
+    const tdsRows         = rows.filter(r => String(r['Type'] || '').trim() === 'Tax Withholding for India Income');
+    const resAdjRows      = rows.filter(r => String(r['Type'] || '').trim() === 'Resolution Adjustment');
+    const resPayoutRows   = rows.filter(r => String(r['Type'] || '').trim() === 'Resolution Payout');
+
+    // Edge case: no Reservation row → skip
+    if (reservationRows.length === 0) continue;
+
+    const resRow = reservationRows[0];
+
+    // Date: Booking date from the Reservation row
+    let dateVal = resRow['Booking date'] || resRow['Booking Date'] || resRow['Date'] || '';
+    let dateObj = parseDate(dateVal);
+
+    // Fallback: use the Date column of any row in the group
+    if (!dateObj || isNaN(dateObj.getTime())) {
+      for (const r of rows) {
+        dateObj = parseDate(r['Date'] || r['date'] || '');
+        if (dateObj && !isNaN(dateObj.getTime())) break;
+      }
+    }
+
+    const guestName     = String(resRow['Guest'] || '').trim();
+    const reservPrice   = parseNum(resRow['Amount']);
+    const serviceFees   = parseNum(resRow['Service fee'] || resRow['Service Fee'] || 0);
+
+    const gst           = hostTaxRows.reduce((s, r) => s + parseNum(r['Amount']), 0);
+    const tdsWithhold   = tdsRows.reduce((s, r) => s + Math.abs(parseNum(r['Amount'])), 0);
+    const resAdj        = resAdjRows.reduce((s, r) => s + parseNum(r['Amount']), 0);
+    const resPayout     = resPayoutRows.reduce((s, r) => s + parseNum(r['Amount']), 0);
+
+    const taxableValue  = reservPrice + serviceFees;
+    const rate          = taxableValue !== 0 ? Math.round((gst / taxableValue) * 100) : 0;
+    const cgst          = gst / 2;
+    const sgst          = gst / 2;
+
+    airbnbRows.push({
+      _date:  dateObj,
+      confirmationCode: code,
+      guestName,
+      gstn:             '',
+      type:             'B2C',
+      serviceFees,
+      reservationPrice: reservPrice,
+      taxableValue,
+      cgst,
+      sgst,
+      gst,
+      rate,
+      tdsWithholding:   tdsWithhold,
+      resolutionAdjustments: resAdj,
+      resolutionPayout: resPayout,
+    });
+  }
+
+  // Sort by date ascending
+  airbnbRows.sort((a, b) => {
+    const ta = a._date ? a._date.getTime() : 0;
+    const tb = b._date ? b._date.getTime() : 0;
+    return ta - tb;
+  });
+
+  // Build payout sheet rows
+  const airbnbPayoutRows = payoutRows.map(r => ({
+    _date:     parseDate(r['Date'] || r['date'] || ''),
+    type:      String(r['Type'] || '').trim(),
+    details:   String(r['Details'] || r['details'] || '').trim(),
+    refCode:   String(r['Reference code'] || r['Reference Code'] || '').trim(),
+    currency:  String(r['Currency'] || '').trim(),
+    paidOut:   parseNum(r['Paid out'] || r['Paid Out'] || 0),
+  }));
+
+  return { airbnbRows, airbnbPayoutRows };
+}
+
+// ── MAKEMYTRIP PROCESSING ─────────────────────────────────────────────────────
+
+/**
+ * Process MakeMyTrip/Goibibo CSV export.
+ * @param {File} file
+ * @returns {Promise<Array>}
+ */
+async function processMMT(file) {
+  const buf = await readFileBuffer(file);
+  const rows = readCsvRows(buf);
+
+  const mmtRows = [];
+
+  for (const row of rows) {
+    const basePrice = parseNum(row['Base Price'] || row['base_price'] || '');
+    // Skip rows with empty or zero base price
+    if (!basePrice) continue;
+
+    const propertyTaxes = parseNum(
+      row['Property Taxes'] || row['property_taxes'] || row['GST'] || row['gst'] || ''
+    );
+
+    // Final Taxable Value computation
+    let finalTaxableValue, rate;
+    const ratio = basePrice !== 0 ? propertyTaxes / basePrice : 0;
+    if (Math.abs(ratio - 0.05) < 0.005) {
+      finalTaxableValue = basePrice;
+      rate = 5;
+    } else {
+      finalTaxableValue = basePrice * 0.95;
+      rate = finalTaxableValue !== 0 ? Math.round((propertyTaxes / finalTaxableValue) * 100) : 0;
+    }
+
+    const gst = propertyTaxes;
+    const customerGSTN = String(row['Customer GSTN'] || row['customer_gstn'] || '').trim();
+
+    let igst, cgst, sgst;
+    if (customerGSTN.startsWith('27')) {
+      cgst = gst / 2;
+      sgst = gst / 2;
+      igst = 0;
+    } else {
+      igst = gst;
+      cgst = 0;
+      sgst = 0;
+    }
+
+    const tcsAmt = parseNum(row['TCS Amount'] || row['tcs_amount'] || '');
+    const tdsAmt = parseNum(row['TDS Amount'] || row['tds_amount'] || '');
+
+    // Discount
+    const discountRaw = row['Discount'] || row['discount'] || '';
+    const discount = parseNum(discountRaw);
+
+    const bookingDate = String(row['Booking Date'] || row['booking_date'] || '').trim();
+
+    mmtRows.push({
+      _date:              parseDate(bookingDate),
+      pnr:                String(row['PNR'] || '').replace(/^\t+/, '').trim(),
+      brand:              String(row['Brand'] || '').trim(),
+      parentBookingId:    String(row['Parent Booking ID'] || row['Parent Booking Id'] || '').replace(/^\t+/, '').trim(),
+      customerName:       String(row['Customer Name'] || '').trim(),
+      customerGSTN,
+      customerCompany:    String(row['Customer Company Name'] || '').trim(),
+      type:               customerGSTN ? 'B2B' : 'B2C',
+      basePrice,
+      discount,
+      finalTaxableValue,
+      igst,
+      cgst,
+      sgst,
+      rate,
+      gst,
+      commission:         parseNum(row['Commission'] || ''),
+      gstOnCommission:    parseNum(row['GST on Commission'] || ''),
+      totalComm:          parseNum(row['Total Commission'] || row['Total Comm.'] || ''),
+      tcsAmount:          tcsAmt,
+      tdsAmount:          tdsAmt,
+      grossPayable:       parseNum(row['Gross Payable'] || ''),
+      tcs:                tcsAmt,
+      tds:                tdsAmt,
+      adjustments:        parseNum(row['Amount adjusted'] || row['Adjustments'] || ''),
+      adjustmentType:     String(row['Adjustment Type'] || '').trim(),
+      adjustedAgainstPnr: String(row['Adjusted Against PNR'] || '').trim(),
+    });
+  }
+
+  // Sort by date ascending
+  mmtRows.sort((a, b) => {
+    const ta = a._date ? a._date.getTime() : 0;
+    const tb = b._date ? b._date.getTime() : 0;
+    return ta - tb;
+  });
+
+  return mmtRows;
+}
+
+// ── DIRECT SALES PROCESSING ───────────────────────────────────────────────────
+
+/**
+ * Process Direct Sales/Payments XLSX export.
+ * @param {File} file
+ * @returns {Promise<Array>}
+ */
+async function processDirect(file) {
+  const buf = await readFileBuffer(file);
+  const rows = readXlsxRows(buf, 'in');
+
+  // Filter out Airbnb and Goibibo referrers (case-insensitive prefix)
+  const included = rows.filter(row => {
+    const referrer = String(row['Referrer'] || row['referrer'] || '').trim().toLowerCase();
+    return !referrer.startsWith('airbnb') && !referrer.startsWith('goibibo');
+  });
+
+  // Group by Invoice Number
+  const grouped = {};
+  const groupOrder = [];
+  for (const row of included) {
+    const invNo = String(row['Invoice Number'] || row['Invoice No'] || '').trim();
+    if (!invNo) continue;
+    if (!grouped[invNo]) {
+      grouped[invNo] = [];
+      groupOrder.push(invNo);
+    }
+    grouped[invNo].push(row);
+  }
+
+  const directRows = [];
+
+  for (const invNo of groupOrder) {
+    const rows = grouped[invNo];
+    const firstRow = rows[0];
+
+    let amount = 0;
+    let discount = 0;
+    let cgst = 0;
+    let sgst = 0;
+    let otherAdj = 0;
+
+    for (const row of rows) {
+      const desc    = String(row['Description'] || '').trim();
+      const descL   = desc.toLowerCase();
+      const amtINR  = parseNum(row['Amount INR'] || row['Amount'] || 0);
+
+      const isOsiRow   = descL.startsWith('osi') || descL.startsWith('onn shelter');
+      const isCgst     = descL.includes('cgst');
+      const isSgst     = descL.includes('sgst');
+      const isGst      = (descL.includes('gst') || descL.includes('goods & services tax') || descL.includes('goods and service')) && !isCgst && !isSgst;
+      const isDiscount = amtINR < 0 && !isOsiRow;
+
+      if (isOsiRow) {
+        amount += amtINR;
+      } else if (isDiscount) {
+        discount += Math.abs(amtINR);
+      } else if (isCgst) {
+        cgst += amtINR;
+      } else if (isSgst) {
+        sgst += amtINR;
+      } else if (isGst) {
+        cgst += amtINR / 2;
+        sgst += amtINR / 2;
+      } else if (amtINR !== 0) {
+        otherAdj += amtINR;
+      }
+    }
+
+    // Edge case: no OSI/Onn Shelter rows → skip this invoice
+    if (amount === 0) continue;
+
+    const finalTaxableValue = amount - discount;
+    const totalGst          = cgst + sgst;
+    const invoiceValue      = finalTaxableValue + totalGst;
+    const ratePercent       = totalGst > 0 && finalTaxableValue > 0
+      ? Math.round((totalGst / finalTaxableValue) * 100)
+      : 0;
+
+    const chargeDate = firstRow['Charge Date'] || firstRow['charge_date'] || firstRow['Check out Date'] || '';
+    const dateObj = parseDate(chargeDate);
+
+    directRows.push({
+      _date:             dateObj,
+      invoiceNo:         invNo,
+      bookingNumber:     String(firstRow['Booking number'] || firstRow['Booking Number'] || '').trim(),
+      guestName:         String(firstRow['Guest'] || '').trim(),
+      gstn:              '',
+      type:              'B2C',
+      amount,
+      discount,
+      finalTaxableValue,
+      cgst,
+      sgst,
+      totalGst,
+      invoiceValue,
+      otherAdj,
+      rate:              ratePercent,
+    });
+  }
+
+  // Sort by date ascending
+  directRows.sort((a, b) => {
+    const ta = a._date ? a._date.getTime() : 0;
+    const tb = b._date ? b._date.getTime() : 0;
+    return ta - tb;
+  });
+
+  return directRows;
+}
+
+// ── EXCEL WORKBOOK BUILDER ────────────────────────────────────────────────────
+
+/**
+ * Build the Sales Register workbook.
+ * SheetJS CE does not support cell styles natively; styles are skipped.
+ * @param {Array} airbnbRows
+ * @param {Array} airbnbPayoutRows
+ * @param {Array} mmtRows
+ * @param {Array} directRows
+ * @param {string} monthYear - e.g. '2026-04'
+ * @returns {Object} XLSX workbook
+ */
+function buildWorkbook(airbnbRows, airbnbPayoutRows, mmtRows, directRows, monthYear) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Sheet 1: Airbnb ──────────────────────────────────────────────────────
+  const abHeader = [
+    'Sr.No', 'Date', 'Confirmation Code', 'Guest Name', 'GSTN', 'Type',
+    'Service Fees', 'Reservation Price', 'Taxable Value',
+    'CGST', 'SGST', 'GST', 'Rate %',
+    'TDS Withholding', 'Resolution Adjustments', 'Resolution Payout',
+  ];
+  const abData = [
+    ['AIRBNB — Sales Register'],
+    [],
+    [],
+    abHeader,
+    ...airbnbRows.map((r, i) => [
+      i + 1,
+      formatDate(r._date),
+      r.confirmationCode,
+      r.guestName,
+      r.gstn,
+      r.type,
+      +r.serviceFees.toFixed(2),
+      +r.reservationPrice.toFixed(2),
+      +r.taxableValue.toFixed(2),
+      +r.cgst.toFixed(2),
+      +r.sgst.toFixed(2),
+      +r.gst.toFixed(2),
+      r.rate,
+      +r.tdsWithholding.toFixed(2),
+      +r.resolutionAdjustments.toFixed(2),
+      +r.resolutionPayout.toFixed(2),
+    ]),
+  ];
+  const abWs = XLSX.utils.aoa_to_sheet(abData);
+  XLSX.utils.book_append_sheet(wb, abWs, 'Airbnb');
+
+  // ── Sheet 2: Aibnb Payout (note the intentional typo) ────────────────────
+  const apHeader = ['Date', 'Type', 'Details', 'Reference Code', 'Currency', 'Paid Out'];
+  const apData = [
+    ['AIBNB PAYOUT — Sales Register'],
+    [],
+    [],
+    apHeader,
+    ...airbnbPayoutRows.map(r => [
+      formatDate(r._date),
+      r.type,
+      r.details,
+      r.refCode,
+      r.currency,
+      +r.paidOut.toFixed(2),
+    ]),
+  ];
+  const apWs = XLSX.utils.aoa_to_sheet(apData);
+  XLSX.utils.book_append_sheet(wb, apWs, 'Aibnb Payout');
+
+  // ── Sheet 3: MakeMyTrip ───────────────────────────────────────────────────
+  const mmtHeader = [
+    'Date', 'PNR', 'Brand', 'Parent Booking ID', 'Customer Name',
+    'Customer GSTN', 'Customer Company Name', 'Type',
+    'Base Price', 'Discount', 'Final Taxable Value',
+    'IGST', 'CGST', 'SGST', 'Rate %', 'GST',
+    'Commission', 'GST on Commission', 'Total Comm.',
+    'TCS Amount', 'TDS Amount', 'Gross Payable',
+    'TCS', 'TDS', 'Adjustments', 'Adjustment Type', 'Adjusted Against PNR',
+  ];
+  const mmtData = [
+    ['MAKEMYTRIP — Sales Register'],
+    [],
+    [],
+    mmtHeader,
+    ...mmtRows.map(r => [
+      formatDate(r._date),
+      r.pnr,
+      r.brand,
+      r.parentBookingId,
+      r.customerName,
+      r.customerGSTN,
+      r.customerCompany,
+      r.type,
+      +r.basePrice.toFixed(2),
+      +r.discount.toFixed(2),
+      +r.finalTaxableValue.toFixed(2),
+      +r.igst.toFixed(2),
+      +r.cgst.toFixed(2),
+      +r.sgst.toFixed(2),
+      r.rate,
+      +r.gst.toFixed(2),
+      +r.commission.toFixed(2),
+      +r.gstOnCommission.toFixed(2),
+      +r.totalComm.toFixed(2),
+      +r.tcsAmount.toFixed(2),
+      +r.tdsAmount.toFixed(2),
+      +r.grossPayable.toFixed(2),
+      +r.tcs.toFixed(2),
+      +r.tds.toFixed(2),
+      +r.adjustments.toFixed(2),
+      r.adjustmentType,
+      r.adjustedAgainstPnr,
+    ]),
+  ];
+  const mmtWs = XLSX.utils.aoa_to_sheet(mmtData);
+  XLSX.utils.book_append_sheet(wb, mmtWs, 'MakeMyTrip');
+
+  // ── Sheet 4: Direct Sales ─────────────────────────────────────────────────
+  const dsHeader = [
+    'Date', 'Invoice No', 'Booking Number', 'Guest Name', 'GSTN', 'Type',
+    'Amount', 'Discount', 'Final Taxable Value',
+    'CGST', 'SGST', 'Total GST', 'Invoice Value',
+    'Other Adjustments', 'Rate %',
+  ];
+  const dsData = [
+    ['DIRECT SALES — Sales Register'],
+    [],
+    [],
+    dsHeader,
+    ...directRows.map(r => [
+      formatDate(r._date),
+      r.invoiceNo,
+      r.bookingNumber,
+      r.guestName,
+      r.gstn,
+      r.type,
+      +r.amount.toFixed(2),
+      +r.discount.toFixed(2),
+      +r.finalTaxableValue.toFixed(2),
+      +r.cgst.toFixed(2),
+      +r.sgst.toFixed(2),
+      +r.totalGst.toFixed(2),
+      +r.invoiceValue.toFixed(2),
+      +r.otherAdj.toFixed(2),
+      r.rate,
+    ]),
+  ];
+  const dsWs = XLSX.utils.aoa_to_sheet(dsData);
+  XLSX.utils.book_append_sheet(wb, dsWs, 'Direct Sales');
+
+  return wb;
+}
+
+// ── STATUS HELPER ─────────────────────────────────────────────────────────────
+
+/**
+ * Update the status line in the Sales Register tab.
+ * @param {string} msg
+ * @param {'info'|'error'|'success'} [type]
+ */
+function srSetStatus(msg, type) {
+  const el = document.getElementById('sr-status');
+  el.textContent = msg;
+  el.className = 'sr-status' + (type ? ' ' + type : '');
+}
+
+/**
+ * Set disabled state on both action buttons.
+ * @param {boolean} disabled
+ */
+function srSetBusy(disabled) {
+  document.getElementById('sr-process-btn').disabled = disabled;
+  document.getElementById('sr-save-btn').disabled    = disabled;
+}
+
+// ── MAIN PIPELINE ─────────────────────────────────────────────────────────────
+
+/**
+ * Run the full processing pipeline.
+ * @param {boolean} saveToHistory - Whether to upload to Supabase afterwards.
+ */
+async function runPipeline(saveToHistory) {
+  // --- Collect inputs ---
+  const monthEl  = document.getElementById('sr-month');
+  const monthVal = (monthEl.value || '').trim(); // e.g. '2026-04'
+
+  if (!monthVal) {
+    srSetStatus('Please select a month before processing.', 'error');
+    return;
+  }
+
+  const airbnbFiles = [
+    document.getElementById('sr-ab-w1').files[0],
+    document.getElementById('sr-ab-w2').files[0],
+    document.getElementById('sr-ab-w3').files[0],
+    document.getElementById('sr-ab-w4').files[0],
+    document.getElementById('sr-ab-w5').files[0],
+  ].filter(Boolean);
+
+  const mmtFile    = document.getElementById('sr-mmt').files[0];
+  const directFile = document.getElementById('sr-direct').files[0];
+
+  // --- Validate ---
+  if (airbnbFiles.length === 0) {
+    srSetStatus('Please upload at least one Airbnb weekly file (Week 1).', 'error');
+    return;
+  }
+  if (!mmtFile) {
+    srSetStatus('Please upload the MakeMyTrip/Goibibo CSV file.', 'error');
+    return;
+  }
+  if (!directFile) {
+    srSetStatus('Please upload the Direct Sales XLSX file.', 'error');
+    return;
+  }
+
+  srSetBusy(true);
+
+  try {
+    // --- Process Airbnb ---
+    srSetStatus('Reading files…');
+    const { airbnbRows, airbnbPayoutRows } = await processAirbnb(airbnbFiles);
+
+    // --- Process MMT ---
+    srSetStatus('Processing MakeMyTrip…');
+    const mmtRows = await processMMT(mmtFile);
+
+    // --- Process Direct ---
+    srSetStatus('Processing Direct Sales…');
+    const directRows = await processDirect(directFile);
+
+    // --- Build workbook ---
+    srSetStatus('Building Excel file…');
+    const wb = buildWorkbook(airbnbRows, airbnbPayoutRows, mmtRows, directRows, monthVal);
+    const fileName = 'Sales_Register_' + monthVal + '.xlsx';
+
+    // Generate file bytes
+    const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob  = new Blob([wbOut], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    // --- Download ---
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href  = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    srSetStatus(
+      `Done! Downloaded ${fileName} (${airbnbRows.length} Airbnb, ${mmtRows.length} MMT, ${directRows.length} Direct Sales rows).`,
+      'success'
+    );
+
+    // --- Optionally save to Supabase ---
+    if (saveToHistory) {
+      await saveToSupabase(blob, monthVal, airbnbFiles.length);
+    }
+
+  } catch (err) {
+    console.error('Sales Register pipeline error:', err);
+    srSetStatus('Error: ' + err.message, 'error');
+  } finally {
+    srSetBusy(false);
+  }
+}
+
+// ── SUPABASE: SAVE TO HISTORY ─────────────────────────────────────────────────
+
+/**
+ * Display label from month_year string, e.g. '2026-04' → 'April 2026'
+ * @param {string} monthYear
+ * @returns {string}
+ */
+function monthYearToLabel(monthYear) {
+  if (!monthYear) return monthYear;
+  const [year, month] = monthYear.split('-');
+  const monthNames = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December',
+  ];
+  const m = parseInt(month, 10);
+  return (monthNames[m - 1] || month) + ' ' + year;
+}
+
+/**
+ * Upload the generated file to Supabase Storage and record metadata in the DB.
+ * @param {Blob} blob
+ * @param {string} monthYear - e.g. '2026-04'
+ * @param {number} airbnbCount
+ */
+async function saveToSupabase(blob, monthYear, airbnbCount) {
+  srSetStatus('Saving to Supabase…');
+
+  const filePath    = monthYear + '/Sales_Register_' + monthYear + '.xlsx';
+  const displayLabel = monthYearToLabel(monthYear);
+
+  // Check if a record already exists for this month
+  const { data: existing, error: fetchErr } = await supabase
+    .from('monthly_uploads')
+    .select('id, file_path')
+    .eq('month_year', monthYear);
+
+  if (fetchErr) {
+    srSetStatus('Supabase fetch error: ' + fetchErr.message, 'error');
+    return;
+  }
+
+  if (existing && existing.length > 0) {
+    const confirmed = window.confirm(
+      `A record for ${displayLabel} already exists. Overwrite it?`
+    );
+    if (!confirmed) {
+      srSetStatus('Save cancelled — existing record not overwritten.', 'info');
+      return;
+    }
+
+    // Delete old storage file(s)
+    for (const rec of existing) {
+      if (rec.file_path) {
+        await supabase.storage.from(STORAGE_BUCKET).remove([rec.file_path]);
+      }
+    }
+
+    // Delete old DB records
+    await supabase.from('monthly_uploads').delete().eq('month_year', monthYear);
+  }
+
+  // Upload file to Storage
+  const { error: uploadErr } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, blob, {
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      upsert: true,
+    });
+
+  if (uploadErr) {
+    srSetStatus('Storage upload error: ' + uploadErr.message, 'error');
+    return;
+  }
+
+  // Insert DB record
+  const { error: insertErr } = await supabase
+    .from('monthly_uploads')
+    .insert({
+      month_year:        monthYear,
+      display_label:     displayLabel,
+      airbnb_file_count: airbnbCount,
+      file_path:         filePath,
+    });
+
+  if (insertErr) {
+    srSetStatus('DB insert error: ' + insertErr.message, 'error');
+    return;
+  }
+
+  srSetStatus(`Saved to history: ${displayLabel}.`, 'success');
+  loadHistory();
+}
+
+// ── SUPABASE: HISTORY ─────────────────────────────────────────────────────────
+
+/**
+ * Load and render the saved months history table.
+ */
+async function loadHistory() {
+  const container = document.getElementById('sr-history-body');
+  container.innerHTML = '<div class="sr-empty">Loading…</div>';
+
+  const { data, error } = await supabase
+    .from('monthly_uploads')
+    .select('*')
+    .order('month_year', { ascending: false });
+
+  if (error) {
+    container.innerHTML = `<div class="sr-empty" style="color:var(--red)">Error loading history: ${error.message}</div>`;
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="sr-empty">No saved months yet. Use "Save to History" to store a generated register.</div>';
+    return;
+  }
+
+  const rows = data.map(rec => {
+    const uploadedAt = rec.uploaded_at
+      ? new Date(rec.uploaded_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+      : '—';
+    return `
+      <tr>
+        <td><strong>${rec.display_label || rec.month_year}</strong></td>
+        <td style="text-align:left">${uploadedAt}</td>
+        <td style="text-align:center"><span class="badge">${rec.airbnb_file_count || 0} files</span></td>
+        <td style="text-align:right">
+          <button class="btn btn-sm" data-path="${rec.file_path}" data-label="${rec.display_label || rec.month_year}" onclick="downloadFromHistory(this)">
+            ⬇ Download
+          </button>
+        </td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="history-tbl">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th style="text-align:left">Uploaded At</th>
+          <th style="text-align:center">Files</th>
+          <th style="text-align:right">Action</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+/**
+ * Download a file from Supabase Storage.
+ * @param {HTMLElement} btn
+ */
+async function downloadFromHistory(btn) {
+  const filePath = btn.dataset.path;
+  const label    = btn.dataset.label;
+  const origText = btn.textContent;
+
+  if (!filePath) {
+    alert('No file path recorded for this entry.');
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = '…';
+
+  const { data: blob, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .download(filePath);
+
+  if (error) {
+    alert('Download error: ' + error.message);
+    btn.disabled    = false;
+    btn.textContent = origText;
+    return;
+  }
+
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href  = url;
+  link.download = 'Sales_Register_' + filePath.split('/')[0] + '.xlsx';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  btn.disabled    = false;
+  btn.textContent = origText;
+}
+
+// ── BUTTON EVENT LISTENERS ────────────────────────────────────────────────────
+document.getElementById('sr-process-btn').addEventListener('click', () => runPipeline(false));
+document.getElementById('sr-save-btn').addEventListener('click',    () => runPipeline(true));
+
+</script>
+</body>
+</html>

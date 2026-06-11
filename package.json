@@ -1,0 +1,14 @@
+{
+  "name": "osi-hospitality-dashboard",
+  "version": "1.0.0",
+  "description": "OSI Hospitality Financial Analysis Dashboard with Sales Register",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
