@@ -302,12 +302,38 @@
     tr.grp td {
       font-weight: 700;
       color: var(--navy);
-      background: var(--panel2)
+      background: var(--panel2);
+      padding-top: 11px;
+      padding-bottom: 11px;
+      font-size: 13px
     }
 
+    /* Category sub-headers: Direct Expenses, Indirect Expenses */
+    tr.grp2 td {
+      font-weight: 700;
+      color: var(--navy);
+      background: transparent;
+      padding-top: 10px;
+      padding-bottom: 8px;
+      font-size: 13px;
+      border-top: 1px solid var(--line)
+    }
+
+    /* Finance Cost, Depreciation, Other Income rows */
     tr.sub td:first-child {
       padding-left: 22px;
       color: var(--ink)
+    }
+
+    /* Individual sub-ledger items under Direct / Indirect Expenses */
+    tr.sub2 td {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400
+    }
+
+    tr.sub2 td:first-child {
+      padding-left: 36px
     }
 
     tr.tot td {
@@ -918,12 +944,21 @@
   <!-- PROPERTIES -->
   <section class="view" id="view-properties">
     <div class="kpis" id="propKpis"></div>
+
+    <!-- Contract Tracker upload / DB status banner -->
+    <div id="propBanner" style="display:none;margin-bottom:12px;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap"></div>
+
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
         <div><h3 style="margin:0">Property Database</h3><div class="cap" id="propTblCap" style="margin:2px 0 0"></div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <input id="propSearch" placeholder="🔍 Search tenant, property, pincode…" style="padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:12px;min-width:230px;color:var(--ink)">
           <select id="propArea2" style="padding:8px 11px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:12px;font-weight:600;color:var(--ink)"></select>
+          <!-- Upload Contract Tracker -->
+          <input type="file" id="propTrackerFile" accept=".xlsx,.xls" style="display:none">
+          <button id="propUpload" title="Upload Contract Tracker V2.xlsx to refresh property data" style="padding:8px 14px;border-radius:10px;border:1px solid var(--teal);background:rgba(47,148,136,.10);color:var(--teal);font-size:12px;font-weight:600;cursor:pointer">📂 Upload Tracker</button>
+          <!-- Save to DB (shown only after a fresh upload) -->
+          <button id="propSaveDb" style="display:none;padding:8px 14px;border-radius:10px;border:none;background:#2f9488;color:#fff;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(47,148,136,.28)">☁️ Save to DB</button>
           <button id="propExport" style="padding:8px 14px;border-radius:10px;border:none;background:var(--navy);color:#fff;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 3px 10px rgba(42,74,107,.18)">⬇ CSV</button>
         </div>
       </div>
@@ -1249,6 +1284,32 @@
     function curRent(p) { return p.rents && p.rents.length ? p.rents[0] : 0; }
     function finalRent(p) { return p.rents && p.rents.length ? p.rents[p.rents.length - 1] : 0; }
 
+    // Mumbai pincode → readable area name (fallback when location string is too short)
+    const PINCODE_AREAS = {
+      '400011': 'Sane Guruji Marg', '400050': 'Bandra West',
+      '400051': 'BKC',              '400052': 'Khar West',
+      '400053': 'Santacruz West',   '400054': 'Santacruz',
+      '400056': 'Santacruz (LIC)',  '400069': 'Andheri East',
+      '400070': 'BKC (Kurla)',      '400093': 'Andheri East',
+      '400102': 'Borivali West',    '411014': 'Pune',
+    };
+
+    /** Returns a readable area/locality name for a property record. */
+    function propArea(p) {
+      const loc = String(p.location || '');
+      const parts = loc.split(',').map(s => s.trim()).filter(Boolean);
+      const SKIP  = /^(flat|floor|shop|unit|plot|door|house|room|wing|survey)\b/i;
+      const IS_NUM     = /^\d+$/;
+      const IS_PINCODE = /^\d{6}$/;
+      const meaningful = parts.filter(t => !SKIP.test(t) && !IS_NUM.test(t) && !IS_PINCODE.test(t));
+      // Prefer the last locality-like segment when the address is rich (≥3 meaningful parts)
+      if (meaningful.length >= 2) {
+        return meaningful[meaningful.length - 1];
+      }
+      // Short address — fall back to pincode area name, then the extracted segment, then pin itself
+      return PINCODE_AREAS[p.pin] || (meaningful[0] || p.pin || 'Unknown');
+    }
+
     // (directExp and indirectExp are defined in the main aggregation block below)
 
     // Parse depreciation file
@@ -1272,6 +1333,8 @@
     }
 
 let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
+    let propSort = { key: 'from', dir: 1 };   // default: sort by lease start date
+    let propInit = false;                       // guards wirePropControls() one-time wiring
     const COLORS = ['#d65a3c', '#3f7cbf', '#2f9488', '#b8902f', '#4f46e5', '#5b9bd5', '#e0a458', '#6aa84f', '#a0556b', '#4a8da8'];
     const CH_COLOR = { Airbnb: '#d65a3c', MakeMyTrip: '#3f7cbf', 'Direct Sales': '#2f9488', 'Other Rental Sales': '#b8902f' };
     const fmt = n => { const s = n < 0 ? '-' : ''; n = Math.abs(Math.round(n)); return s + '₹' + n.toLocaleString('en-IN'); };
@@ -1519,6 +1582,9 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
         catch (err) {
           document.getElementById('status').textContent = 'Error: ' + err.message;
           console.error(err);
+        } finally {
+          // Reset so the same file can be re-selected (e.g. after editing its contents)
+          e.target.value = '';
         }
       };
       rd.readAsArrayBuffer(f);
@@ -1907,43 +1973,59 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
       //   % column       : raw expense value / rev (positive % for expenses, negative for credits)
       const ms2 = activeMonths();
 
-      // Dynamically read sub-ledgers for a category filter, sorted by magnitude
-      const catSubItems = filterFn => {
-        const result = [];
+      // Helper: sum P&L ledgers matching a filter over active months
+      const sumL = filterFn => {
+        let total = 0;
         DATA.ledgers.forEach(l => {
-          if (l.stmt === 'P&L' && filterFn(l)) {
-            const v = ms2.reduce((t, m) => t + (l.flow[m] || 0) * l.sign, 0);
-            if (v !== 0) result.push([l.name, v]);
-          }
+          if (l.stmt === 'P&L' && filterFn(l))
+            ms2.forEach(m => total += (l.flow[m] || 0) * l.sign);
         });
-        return result.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+        return total;
       };
 
-      const directSubs  = catSubItems(l => l.cat === 'Direct Cost');
-      const empSubs     = catSubItems(l => l.cat === 'Employee Cost');
-      const gstSubs     = catSubItems(l => l.cat === 'GST Expense');
-      const otherExpAmt = catExp('Other Expenses');
+      // ── Direct Expenses sub-items (reference order) ────────────────────
+      const s_hosting     = sumL(l => l.cat === 'Direct Cost' && l.sub === 'Hosting Charges');
+      const s_site        = sumL(l => l.cat === 'Direct Cost' && l.sub === 'Site Expenses');
+      const s_otherDirect = sumL(l => l.cat === 'Direct Cost' && l.sub !== 'Hosting Charges' && l.sub !== 'Site Expenses');
+      const s_rent        = sumL(l => l.sub === 'Rent');   // mapped to Other Expenses in Tally but shown under Direct
+
+      const totalDirect   = s_hosting + s_site + s_otherDirect + s_rent;
+
+      // ── Indirect Expenses sub-items (reference order) ──────────────────
+      const s_director    = sumL(l => l.sub === 'Director Remuneration');
+      const s_gst         = sumL(l => l.cat === 'GST Expense');
+      const s_empBenefit  = sumL(l => l.sub === 'Salaries');
+      const s_powerFuel   = sumL(l => l.sub === 'Power & Fuel');
+      const s_otherInd    = sumL(l => l.cat === 'Other Expenses' && l.sub !== 'Rent' && l.sub !== 'Power & Fuel');
+
+      const totalIndirect = s_director + s_gst + s_empBenefit + s_powerFuel + s_otherInd;
+
+      // EBITDA (totalDirect + totalIndirect == dirOnly + indirectAll — same math, different presentation)
+      const eb2 = rev + oi - totalDirect - totalIndirect;
 
       const rows = [
-        ['grp',  'Revenue from Operations',     rev,              pct(rev, rev)],
-        ['sub',  'Other Income',                oi,               pct(oi, rev)],
-        ['grp',  'Total Income',                rev + oi,         pct(rev + oi, rev)],
-        ['grp2', 'Direct Expenses',             -dirOnly,         pct(dirOnly, rev)],
-        ...directSubs.map(([n, v]) =>
-          ['sub2', n, -v, pct(v, rev)]),
-        ['grp2', 'Indirect Expenses',           -indirectAll,     pct(indirectAll, rev)],
-        ...empSubs.map(([n, v]) =>
-          ['sub2', n, -v, pct(v, rev)]),
-        ...gstSubs.map(([n, v]) =>
-          ['sub2', n, -v, pct(v, rev)]),
-        ...(otherExpAmt !== 0 ? [['sub2', 'Other Indirect Expenses', -otherExpAmt, pct(otherExpAmt, rev)]] : []),
-        ['grp',  'EBITDA',                      eb,               pct(eb, rev)],
-        ['sub',  'Finance Cost',                -fc,              pct(fc, rev)],
-        ['sub',  'Depreciation & Amortisation', -dep,             pct(dep, rev)],
-        ['tot',  'Profit Before Tax',           p,                pct(p, rev)],
-      ].filter(([cls,, amt]) =>
-        ['grp', 'grp2', 'tot'].includes(cls) ||
-        (typeof amt === 'number' && amt !== 0));
+        ['grp',  'Revenue from Operations',          rev,              pct(rev, rev)],
+        oi  !== 0 && ['sub',  'Other Income',         oi,               pct(oi, rev)],
+        ['grp',  'Total Income',                      rev + oi,         pct(rev + oi, rev)],
+
+        ['grp2', 'Direct Expenses',                   -totalDirect,     pct(totalDirect, rev)],
+        s_hosting     !== 0 && ['sub2', 'Hosting Charges',          -s_hosting,     pct(s_hosting, rev)],
+        s_site        !== 0 && ['sub2', 'Site Expenses',             -s_site,        pct(s_site, rev)],
+        s_otherDirect !== 0 && ['sub2', 'Other Direct Expenses',    -s_otherDirect, pct(s_otherDirect, rev)],
+        s_rent        !== 0 && ['sub2', 'Rent',                      -s_rent,        pct(s_rent, rev)],
+
+        ['grp2', 'Indirect Expenses',                 -totalIndirect,   pct(totalIndirect, rev)],
+        s_director    !== 0 && ['sub2', "Director's Remuneration",   -s_director,    pct(s_director, rev)],
+        s_gst         !== 0 && ['sub2', 'Rates & Taxes (GST Expense)', -s_gst,       pct(s_gst, rev)],
+        s_empBenefit  !== 0 && ['sub2', 'Employee Benefit Expenses', -s_empBenefit,  pct(s_empBenefit, rev)],
+        s_powerFuel   !== 0 && ['sub2', 'Power & Fuel Expenses',     -s_powerFuel,   pct(s_powerFuel, rev)],
+        s_otherInd    !== 0 && ['sub2', 'Other Indirect Expenses',   -s_otherInd,    pct(s_otherInd, rev)],
+
+        ['grp',  'EBITDA',                            eb2,              pct(eb2, rev)],
+        fc  !== 0 && ['sub',  'Finance Cost',          -fc,              pct(fc, rev)],
+        dep !== 0 && ['sub',  'Depreciation & Amortisation', -dep,      pct(dep, rev)],
+        ['tot',  'Profit Before Tax',                  p,                pct(p, rev)],
+      ].filter(Boolean);
 
       document.querySelector('#pnlTbl tbody').innerHTML = rows.map(([cls, lbl, amt, pc]) =>
         `<tr class="${cls}"><td>${lbl}</td><td class="${typeof amt === 'number' && amt < 0 ? 'neg' : ''}">${typeof amt === 'number' ? fmt(amt) : ''}</td><td>${pc || ''}</td></tr>`
@@ -1981,7 +2063,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
       document.getElementById('bsKpis').innerHTML = kpiHTML([
         { l: 'Total Assets', v: fmtCr(totAssets), n: 'as at ' + periodLabel() },
         { l: 'Net Worth', v: fmtCr(eq), n: 'share capital + other equity' },
-        { l: 'Total Debt', v: fmtCr(ncl + cl), n: 'loans + current liabilities' },
+        { l: 'Total Debt', v: fmtCr(ncl), n: 'term loans & borrowings' },
         { l: 'Balance Check', v: Math.abs(totAssets - totEL) < 1 ? '✓ Tallied' : fmt(totAssets - totEL), n: 'A = E+L', cls: Math.abs(totAssets - totEL) < 1 ? 'pos' : 'neg' },
       ]);
       document.getElementById('bsTblCap').textContent = 'As at ' + periodLabel();
@@ -2031,12 +2113,12 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
 
       // Financial Position insights
       const cash = cashAt(lastM);
-      const netDebt = (ncl + cl) - cash;
+      const netDebt = ncl - cash;
       const wc = ca - cl;
       const cr = cl ? ca / cl : 0;
       const ppePct = totAssets ? ppe / totAssets * 100 : 0;
       const netWorthPct = totAssets ? eq / totAssets * 100 : 0;
-      const debtCapital = (ncl + cl + eq) ? (ncl + cl) / (ncl + cl + eq) * 100 : 0;
+      const debtCapital = (ncl + eq) ? ncl / (ncl + eq) * 100 : 0;
       const bar = (label, val, sub, color, pctW) => `
         <div style="margin-bottom:13px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
@@ -2056,7 +2138,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
           <div style="flex:1;background:linear-gradient(160deg,rgba(63,124,191,.10),rgba(63,124,191,.02));border:1px solid var(--line);border-radius:13px;padding:12px 14px">
             <div style="font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)">Net Debt</div>
             <div style="font-size:19px;font-weight:800;color:#3f7cbf;margin-top:3px">${fmtCr(netDebt)}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px">Debt ${fmtCr(ncl + cl)} − Cash ${fmtCr(cash)}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">Loans ${fmtCr(ncl)} − Cash ${fmtCr(cash)}</div>
           </div>
         </div>` +
         bar('Net Worth (Equity)', fmtCr(eq), netWorthPct.toFixed(1) + '% of total assets · owners\u2019 funds', '#2f9488', netWorthPct) +
@@ -2258,7 +2340,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
   document.querySelector('#ovSnap tbody').innerHTML=snap.map(([l,v,p])=>`<tr><td>${l}</td><td>${v}</td><td>${p}</td></tr>`).join('');
   const cr = cl ? ca / cl : 0;
   const ncl = bsAtMonth(l => l.cat === 'Non-Current Liabilities', lastM);
-  const de = eq ? (ncl + cl) / eq : 0;
+  const de = eq ? ncl / eq : 0;
   const nm = np / rev * 100;
   const health=[
     ['Profitability', np>0?'✓ Profitable':'✗ Loss', pct(np,rev)+' margin'],
@@ -2285,7 +2367,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
   const inv=0; const cash=cashAt(lastM);
   const rec=bsAtMonth(l=>l.sub==='Trade Receivables',lastM);
   const pay=-bsAtMonth(l=>l.sub==='Trade Payables',lastM);
-  const cr=cl?ca/cl:0, qr=cl?(ca-inv)/cl:0, de=eq?(ncl+cl)/eq:0, dassets=assets?(ncl+cl)/assets*100:0;
+  const cr=cl?ca/cl:0, qr=cl?(ca-inv)/cl:0, de=eq?ncl/eq:0, dassets=assets?ncl/assets*100:0;
   const roe=eq?np/eq*100:0, roa=assets?np/assets*100:0;
   // annualization factor for turnover ratios when not full year
   const ms=activeMonths(); const annF=12/ms.length;
@@ -2316,8 +2398,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
   });
   const deSeries = DATA.months.map((_, m) => {
     const e = bsAtMonth(l => l.cat === 'Equity', m) + cumPBT(m);
-    const d = bsAtMonth(l => l.cat === 'Non-Current Liabilities', m)
-             + bsAtMonth(l => l.cat === 'Current Liabilities', m);
+    const d = bsAtMonth(l => l.cat === 'Non-Current Liabilities', m);  // loans only
     return e ? +(d / e).toFixed(2) : 0;
   });
   charts.ratLiq=new Chart(document.getElementById('ratLiq'),{type:'line',
@@ -2406,7 +2487,9 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
     return `<tr><td>${mn}</td><td>${fmt(revS[i])}</td><td>${fmt(expS[i])}</td><td class="${npS[i] < 0 ? 'neg' : ''}">${fmt(npS[i])}</td><td>${pct(npS[i], revS[i])}</td><td class="${gcls}">${gtxt}</td></tr>`;
   }).join('');
 }
-    function renderProperties(){
+    async function renderProperties(){
+  // Auto-load from DB on first visit if no data is in memory
+  if (PROPERTIES.length === 0) await loadPropertiesFromDb();
   const P=PROPERTIES;
   const totRent=P.reduce((s,p)=>s+curRent(p),0);
   const totDep=P.reduce((s,p)=>s+(p.deposit||0),0);
@@ -2418,11 +2501,15 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
     {l:'Final-Year Monthly Rent',v:fmtCr(totFinal),n:'+'+(totRent?((totFinal-totRent)/totRent*100).toFixed(1):0)+'% over lease terms'},
     {l:'Deposits Held',v:fmtCr(totDep),n:pins.length+' locations'},
   ]);
-  // area filter dropdown
-  const byPin={}; P.forEach(p=>{ if(p.pin) byPin[p.pin]=(byPin[p.pin]||0)+1; });
-  const pinRank=Object.entries(byPin).sort((a,b)=>b[1]-a[1]);
+  // Area filter dropdown — rebuilt every render so it tracks the current dataset
+  const byArea={};
+  P.forEach(p=>{ const a=propArea(p); byArea[a]=(byArea[a]||0)+1; });
+  const areaRank=Object.entries(byArea).sort((a,b)=>b[1]-a[1]);
   const sel=document.getElementById('propArea2');
-  if(!sel.dataset.filled){ sel.innerHTML='<option value="">All areas</option>'+pinRank.map(([p,c])=>`<option value="${p}">${p} (${c})</option>`).join(''); sel.dataset.filled='1'; }
+  const prev=sel.value;   // preserve selection across re-renders
+  sel.innerHTML='<option value="">All areas</option>'+
+    areaRank.map(([a,c])=>`<option value="${a}">${a} (${c})</option>`).join('');
+  if(prev && byArea[prev]) sel.value=prev;  // restore if still valid
   drawPropTable();
   if(!propInit){ wirePropControls(); propInit=true; }
 }
@@ -2430,9 +2517,9 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
   const P=PROPERTIES;
   const q=(document.getElementById('propSearch').value||'').toLowerCase().trim();
   const area=document.getElementById('propArea2').value;
-  let rows=P.map((p,i)=>({...p,idx:i+1,rent:curRent(p),esc:escPct(p)}));
-  if(q) rows=rows.filter(p=>(p.tenant+' '+p.building+' '+p.location+' '+p.pin+' '+p.file).toLowerCase().includes(q));
-  if(area) rows=rows.filter(p=>p.pin===area);
+  let rows=P.map((p,i)=>({...p,idx:i+1,rent:curRent(p),esc:escPct(p),_area:propArea(p)}));
+  if(q) rows=rows.filter(p=>(p.tenant+' '+p.building+' '+p.location+' '+p.pin+' '+p._area+' '+p.file).toLowerCase().includes(q));
+  if(area) rows=rows.filter(p=>p._area===area);
   const k=propSort.key, dir=propSort.dir;
   rows.sort((a,b)=>{ let x,y;
     if(k==='from'||k==='to'){ x=propDateKey(a[k]); y=propDateKey(b[k]); return dir*(x-y); }
@@ -2483,6 +2570,133 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
   });
 }
     function esc_html(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ── Properties: banner helper ─────────────────────────────── */
+function propShowBanner(type, msg) {
+  const el = document.getElementById('propBanner');
+  if (!el) return;
+  const STYLES = {
+    info: 'background:rgba(63,124,191,.08);border:1px solid rgba(63,124,191,.2);color:#3f7cbf',
+    ok:   'background:rgba(47,148,136,.08);border:1px solid rgba(47,148,136,.2);color:#2f9488',
+    err:  'background:rgba(214,90,60,.08);border:1px solid rgba(214,90,60,.2);color:#c04a30',
+  };
+  el.style.cssText = (el.style.cssText.split(';')[0] || '') +
+    `;margin-bottom:12px;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;display:flex;${STYLES[type]||STYLES.info}`;
+  el.textContent = msg;
+}
+
+/* ── Contract Tracker parser ───────────────────────────────── */
+function parseContractTracker(bytes) {
+  const wb = XLSX.read(bytes, { type: 'array', cellDates: false });
+  const sheet = wb.Sheets['Contracts'] || wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error('Sheet "Contracts" not found in file.');
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+  if (rows.length < 2) throw new Error('No data rows found in Contracts sheet.');
+
+  const parseNum = v => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; };
+
+  return rows.slice(1).map(row => {
+    // Skip blank rows
+    if (!row[0] && !row[1]) return null;
+
+    const location = String(row[2] || '').trim();
+    const pinMatch = location.match(/\b(\d{6})\b/);
+    const pin = pinMatch ? pinMatch[1] : '';
+
+    // Building = first 2 meaningful comma-separated parts of location
+    const locParts = location.split(',').map(s => s.trim()).filter(Boolean);
+    const building = locParts.slice(0, Math.min(2, locParts.length - 1)).join(', ') ||
+                     location.replace(/,?\s*\d{6}\s*$/, '').trim().substring(0, 60);
+
+    const rents = [row[7], row[8], row[9], row[10], row[11]]
+      .map(v => parseNum(v))
+      .filter(v => v > 0);
+
+    return {
+      file:     String(row[0] || '').trim(),
+      tenant:   String(row[1] || '').trim(),
+      location: location,
+      building: building || location.substring(0, 60),
+      pin:      pin,
+      from:     String(row[3] || '').trim(),
+      to:       String(row[4] || '').trim(),
+      deposit:  parseNum(row[5]),
+      rents:    rents,
+    };
+  }).filter(Boolean);
+}
+
+/* ── Save PROPERTIES to Supabase ───────────────────────────── */
+async function savePropertiesToDb() {
+  const sb = getSupabase();
+  // Clear existing rows for a clean sync
+  const { error: delErr } = await sb.from('properties').delete().neq('id', 0);
+  if (delErr) throw new Error(delErr.message);
+
+  // Batch insert (Supabase handles up to 1000 rows per insert)
+  const rows = PROPERTIES.map(p => ({
+    file_name:   p.file     || null,
+    tenant_name: p.tenant   || null,
+    location:    p.location || null,
+    building:    p.building || null,
+    pincode:     p.pin      || null,
+    period_from: p.from     || null,
+    period_to:   p.to       || null,
+    deposit:     p.deposit  || 0,
+    rent_yr1:    (p.rents && p.rents[0]) || null,
+    rent_yr2:    (p.rents && p.rents[1]) || null,
+    rent_yr3:    (p.rents && p.rents[2]) || null,
+    rent_yr4:    (p.rents && p.rents[3]) || null,
+    rent_yr5:    (p.rents && p.rents[4]) || null,
+  }));
+
+  // Insert in chunks of 500 to stay well within limits
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const { error } = await sb.from('properties').insert(rows.slice(i, i + CHUNK));
+    if (error) throw new Error(error.message);
+  }
+}
+
+/* ── Load PROPERTIES from Supabase ────────────────────────── */
+let propDbLoaded = false;
+async function loadPropertiesFromDb() {
+  if (propDbLoaded) return;          // only auto-load once per session
+  try {
+    const sb = getSupabase();
+    const { data, error } = await sb
+      .from('properties')
+      .select('*')
+      .order('id', { ascending: true });
+    if (error || !data || data.length === 0) return;
+
+    PROPERTIES.length = 0;
+    data.forEach(r => {
+      const rents = [r.rent_yr1, r.rent_yr2, r.rent_yr3, r.rent_yr4, r.rent_yr5]
+        .map(v => parseFloat(v) || 0)
+        .filter(v => v > 0);
+      PROPERTIES.push({
+        file:     r.file_name   || '',
+        tenant:   r.tenant_name || '',
+        location: r.location    || '',
+        building: r.building    || '',
+        pin:      r.pincode     || '',
+        from:     r.period_from || '',
+        to:       r.period_to   || '',
+        deposit:  parseFloat(r.deposit) || 0,
+        rents:    rents,
+      });
+    });
+    propDbLoaded = true;
+
+    // Show DB banner with record count and date
+    const lastUp = data[data.length - 1].created_at
+      ? new Date(data[data.length - 1].created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })
+      : '—';
+    propShowBanner('ok', `☁️ ${data.length} properties loaded from cloud database · last updated ${lastUp}`);
+  } catch (_e) { /* Supabase unavailable — silently skip */ }
+}
+
 
     /* ──────────────────────────────────────────────────────────
        MANAGE DATA — cloud status, load & delete per period
@@ -2670,6 +2884,45 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
 
     /* init */
     periodOptions(); loadAllCloudData();
+
+    // Wire Properties upload buttons immediately (before async DB load)
+    document.getElementById('propUpload').onclick = () => {
+      document.getElementById('propTrackerFile').value = '';
+      document.getElementById('propTrackerFile').click();
+    };
+    document.getElementById('propTrackerFile').onchange = e => {
+      const f = e.target.files[0]; if (!f) return;
+      propShowBanner('info', `⏳ Parsing ${f.name}…`);
+      const rd = new FileReader();
+      rd.onload = ev => {
+        try {
+          const parsed = parseContractTracker(new Uint8Array(ev.target.result));
+          PROPERTIES.length = 0;
+          parsed.forEach(p => PROPERTIES.push(p));
+          propDbLoaded = true;   // treat uploaded data as authoritative
+          renderProperties();
+          propShowBanner('ok', `✅ Loaded ${parsed.length} properties from ${f.name} — click ☁️ Save to DB to persist.`);
+          document.getElementById('propSaveDb').style.display = 'inline-block';
+        } catch (err) {
+          propShowBanner('err', `❌ Parse error: ${err.message}`);
+          console.error(err);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      rd.readAsArrayBuffer(f);
+    };
+    document.getElementById('propSaveDb').onclick = async () => {
+      propShowBanner('info', '⏳ Saving to database…');
+      try {
+        await savePropertiesToDb();
+        propShowBanner('ok', `✅ ${PROPERTIES.length} properties saved to Supabase successfully.`);
+        document.getElementById('propSaveDb').style.display = 'none';
+      } catch (err) {
+        propShowBanner('err', `❌ DB save failed: ${err.message}`);
+        console.error(err);
+      }
+    };
 
     // ─────────────────────────────────────────────────────────────────────────────
     // SALES REGISTER — Processing Pipeline
