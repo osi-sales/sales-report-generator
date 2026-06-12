@@ -1635,6 +1635,15 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
       DATA.ledgers = DATA.ledgers.filter(l => l.stmt !== 'P&L' || tallyNames.has(l.name));
       ensureLedgerTemplates();
 
+      // ── Clean-slate reset for the target month ────────────────────────────
+      // Zero every ledger's slot for this period before re-parsing.
+      // Without this, deleted or zeroed rows in a re-uploaded file leave the
+      // old value in memory and the dashboard never updates those figures.
+      DATA.ledgers.forEach(l => {
+        if (Array.isArray(l.vals) && l.vals.length > monthIdx) l.vals[monthIdx] = 0;
+      });
+      // ─────────────────────────────────────────────────────────────────────
+
       for (const row of rows) {
         if (!row || row.length === 0) continue;
         const particular = String(row[0]).trim();
