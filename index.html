@@ -900,7 +900,10 @@
               <div style="font-size:11px;font-weight:700;color:var(--navy)">Depreciation as per Income Tax Act</div>
               <div style="font-size:10.5px;color:var(--muted)" id="depItStatus">Not uploaded — using ₹0 (tax = 25.168% of PBT)</div>
             </div>
-            <button id="depUpload" style="padding:8px 14px;border-radius:10px;border:none;background:var(--navy);color:#fff;font-size:11.5px;font-weight:600;cursor:pointer">📄 Upload IT Depreciation</button>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <button id="depUpload" style="padding:8px 14px;border-radius:10px;border:none;background:var(--navy);color:#fff;font-size:11.5px;font-weight:600;cursor:pointer">📄 Upload IT Depreciation</button>
+              <button id="depDelete" style="display:none;padding:7px 12px;border-radius:10px;border:1.5px solid #e53e3e;background:transparent;color:#e53e3e;font-size:11px;font-weight:600;cursor:pointer" title="Remove saved depreciation value">🗑️ Remove</button>
+            </div>
             <input type="file" id="depFile" accept=".xlsx,.xls" style="display:none">
           </div>
         </div>
@@ -1221,6 +1224,65 @@
     let depItAnnual = 0; // Depreciation as per Income Tax Act (annual)
     function depItMonthly() { return depItAnnual / 12; }
     function taxablePBT() { const ms = activeMonths(); return pbt() + deprec() - depItMonthly() * ms.length; }
+
+    /** Sync UI: status label + delete button visibility */
+    function updateDepItUI() {
+      const statusEl = document.getElementById('depItStatus');
+      const delBtn   = document.getElementById('depDelete');
+      if (depItAnnual > 0) {
+        if (statusEl) statusEl.textContent =
+          'Loaded: ₹' + Math.round(depItAnnual).toLocaleString('en-IN') + '/yr · ₹' +
+          Math.round(depItAnnual / 12).toLocaleString('en-IN') + '/mo';
+        if (delBtn) delBtn.style.display = 'inline-block';
+      } else {
+        if (statusEl) statusEl.textContent = 'Not uploaded — using ₹0 (tax = 25.168% of PBT)';
+        if (delBtn) delBtn.style.display = 'none';
+      }
+    }
+
+    /** Upsert the current depItAnnual value to Supabase app_settings */
+    async function saveDepItToDb(value) {
+      try {
+        const sb = getSupabase();
+        const { error } = await sb
+          .from('app_settings')
+          .upsert({ key: 'dep_it_annual', value_num: value }, { onConflict: 'key' });
+        if (error) throw error;
+      } catch (e) {
+        console.warn('Could not save IT depreciation to DB:', e.message);
+      }
+    }
+
+    /** Load depItAnnual from Supabase on startup */
+    async function loadDepItFromDb() {
+      try {
+        const sb = getSupabase();
+        const { data, error } = await sb
+          .from('app_settings')
+          .select('value_num')
+          .eq('key', 'dep_it_annual')
+          .maybeSingle();
+        if (!error && data && data.value_num > 0) {
+          depItAnnual = Number(data.value_num);
+          updateDepItUI();
+        }
+      } catch (e) {
+        console.warn('Could not load IT depreciation from DB:', e.message);
+      }
+    }
+
+    /** Delete the IT depreciation from Supabase and reset memory + UI */
+    async function deleteDepItFromDb() {
+      try {
+        const sb = getSupabase();
+        await sb.from('app_settings').delete().eq('key', 'dep_it_annual');
+      } catch (e) {
+        console.warn('Could not delete IT depreciation from DB:', e.message);
+      }
+      depItAnnual = 0;
+      updateDepItUI();
+      renderAll();
+    }
 
     /* ---------- helpers for new analytical tabs ---------- */
     function bsAtMonth(filterFn, monthIdx) {
@@ -1763,6 +1825,7 @@ let DATA = normalize(DUMMY), charts = {}, curView = 'overview';
         if (statusEl) statusEl.innerHTML = originalStatus;
       }
       renderAll();
+      loadDepItFromDb(); // Restore IT depreciation from app_settings
     }
 
     document.getElementById('save-tb-db').onclick = async function() {
@@ -2874,21 +2937,26 @@ async function loadPropertiesFromDb() {
     // IT Depreciation upload wiring
     const depUpBtn = document.getElementById('depUpload');
     if (depUpBtn) {
-      depUpBtn.onclick = () => document.getElementById('depFile').click();
+      depUpBtn.onclick = () => { document.getElementById('depFile').value = ''; document.getElementById('depFile').click(); };
       document.getElementById('depFile').onchange = e => {
         const f = e.target.files[0]; if (!f) return;
         const rd = new FileReader();
-        rd.onload = ev => {
+        rd.onload = async ev => {
           try {
             depItAnnual = parseDepIT(new Uint8Array(ev.target.result));
+            updateDepItUI();
             renderAll();
-            document.getElementById('depItStatus').textContent = 'Loaded: ₹' + Math.round(depItAnnual).toLocaleString('en-IN') + '/yr · ₹' + Math.round(depItAnnual / 12).toLocaleString('en-IN') + '/mo';
+            await saveDepItToDb(depItAnnual);
           } catch (err) {
-            document.getElementById('depItStatus').textContent = 'Error: ' + err.message; console.error(err);
+            document.getElementById('depItStatus').textContent = 'Error: ' + err.message;
+            console.error(err);
+          } finally {
+            e.target.value = '';
           }
         };
         rd.readAsArrayBuffer(f);
       };
+      document.getElementById('depDelete').onclick = () => deleteDepItFromDb();
     }
 
     /* init */
