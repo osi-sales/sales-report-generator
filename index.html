@@ -2400,7 +2400,7 @@
           }
 
           // Warning display for missing prior year data
-          const isPriorDbDataMissing = (priorLoadedCount === 0);
+          const isPriorDbDataMissing = (priorLoadedCount === 0) && (selectedStartYear !== 2024);
           const priorWarningEl = document.getElementById('prior-data-warning');
           if (priorWarningEl) {
             if (isPriorDbDataMissing) {
