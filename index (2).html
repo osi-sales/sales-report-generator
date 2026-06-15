@@ -871,15 +871,10 @@
       <div style="font-size:26px;font-weight:800;color:#1f3a5f;margin-bottom:8px">OSI Hospitality</div>
       <div style="font-size:11px;letter-spacing:3px;font-weight:600;color:#b8902f;margin-bottom:24px;text-transform:uppercase">Financial Dashboard</div>
       
-      <div style="margin-bottom:14px;text-align:left">
-        <label for="user-input" style="font-size:11.5px;font-weight:700;color:#1c2b40;display:block;margin-bottom:6px">Username</label>
-        <input type="text" id="user-input" placeholder="Enter username" style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid rgba(31,58,95,0.15);font-size:14px;background:#f7f9fc;color:#1c2b40;box-sizing:border-box;outline:none;transition:border-color 0.2s">
-      </div>
-
       <div style="margin-bottom:20px;text-align:left">
-        <label for="pass-input" style="font-size:11.5px;font-weight:700;color:#1c2b40;display:block;margin-bottom:6px">Password</label>
+        <label for="pass-input" style="font-size:11.5px;font-weight:700;color:#1c2b40;display:block;margin-bottom:8px">Enter Password</label>
         <input type="password" id="pass-input" placeholder="••••••••" style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid rgba(31,58,95,0.15);font-size:14px;background:#f7f9fc;color:#1c2b40;box-sizing:border-box;outline:none;transition:border-color 0.2s">
-        <div id="pass-error" style="color:#c0492f;font-size:11px;font-weight:600;margin-top:6px;display:none">Incorrect username or password. Please try again.</div>
+        <div id="pass-error" style="color:#c0492f;font-size:11px;font-weight:600;margin-top:6px;display:none">Incorrect password. Please try again.</div>
       </div>
       
       <button id="pass-submit" style="width:100%;background:#1f3a5f;color:#fff;border:none;padding:12px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(31,58,95,0.15);transition:background 0.2s">Access Dashboard</button>
@@ -917,7 +912,8 @@
       <div class="tab" data-v="trends">Trends</div>
       <div class="tab" data-v="ytd">YTD vs LY</div>
       <div class="tab" data-v="properties">Properties</div>
-      <div class="tab" data-v="sales-register">Sales Register &amp; Data</div>
+      <div class="tab" data-v="sales-register">Sales Register</div>
+      <div class="tab" data-v="manage">🗂 Manage Data</div>
     </div>
 
     <!-- OVERVIEW -->
@@ -1462,11 +1458,14 @@
         </div>
       </div>
 
-      <!-- Cloud Status & Tally TB Management -->
-      <div class="kpis" id="mgKpis" style="margin-top:24px"></div>
+    </section>
+
+    <!-- MANAGE DATA -->
+    <section class="view" id="view-manage">
+      <div class="kpis" id="mgKpis"></div>
 
       <!-- How-to guide -->
-      <div class="card" id="mg-guide-card" style="margin-bottom:18px">
+      <div class="card" style="margin-bottom:18px">
         <h3>How to Build the Full Year</h3>
         <div style="font-size:12.5px;color:var(--ink);line-height:1.7;margin-top:8px">
           Export a Trial Balance from Tally for the period you want, then click <b>Load TB file</b> in the top bar.
@@ -1496,7 +1495,7 @@
       </div>
 
       <!-- Three independent TB sections: Monthly / Quarterly / Yearly -->
-      <div class="grid2b" id="mg-tb-sections-card" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:18px">
+      <div class="grid2b" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:18px">
         <div class="card">
           <h3>📅 Monthly Trial Balances</h3>
           <div class="cap">Apr-26 → Mar-27 &middot; 12 separate single-month TBs</div>
@@ -1515,7 +1514,7 @@
       </div>
 
       <!-- Cloud audit table -->
-      <div class="card" id="mg-uploads-card">
+      <div class="card">
         <h3>☁️ Cloud Database — All Uploads</h3>
         <div class="cap" id="mgTblCap">All records saved to Supabase</div>
         <table id="mgTbl" style="margin-top:8px">
@@ -2309,7 +2308,6 @@
       document.getElementById('view-' + curView).classList.add('active');
       if (curView === 'sales-register') {
         loadHistory();
-        renderManage();
       } else {
         renderAll();
       }
@@ -3344,7 +3342,6 @@
        MANAGE DATA — cloud status, load & delete per period
        ────────────────────────────────────────────────────────── */
     async function renderManage() {
-      const showDelete = (typeof userRole !== 'undefined' && userRole === 'read-write');
       const ALL_MONTHS = ['Apr-26', 'May-26', 'Jun-26', 'Jul-26', 'Aug-26', 'Sep-26', 'Oct-26', 'Nov-26', 'Dec-26', 'Jan-27', 'Feb-27', 'Mar-27'];
       const QUARTERS = [
         { key: '2026-Q1', label: 'Q1 (Apr–Jun 26)', endLabel: 'Jun-26' },
@@ -3409,7 +3406,7 @@
           <div style="font-weight:700;color:var(--navy);font-size:12px;margin-bottom:5px">${q.label}</div>
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
             ${rec ? `<span style="background:rgba(63,124,191,.12);color:var(--sky);padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">☁️ ${dt}</span>` : '<span style="background:rgba(107,124,147,.10);color:var(--muted);padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">⬜ Missing</span>'}
-            ${rec && showDelete ? `<button onclick="mgDeleteRecord('${q.key}')" style="padding:2px 8px;border-radius:6px;border:none;background:rgba(214,90,60,.10);color:#c15a3f;font-size:10px;font-weight:600;cursor:pointer">🗑</button>` : ''}
+            ${rec ? `<button onclick="mgDeleteRecord('${q.key}')" style="padding:2px 8px;border-radius:6px;border:none;background:rgba(214,90,60,.10);color:#c15a3f;font-size:10px;font-weight:600;cursor:pointer">🗑</button>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -3422,7 +3419,7 @@
         ${fyRec
           ? `<div style="margin-bottom:8px"><span style="background:rgba(184,144,47,.13);color:var(--gold);padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:700">☁️ Uploaded ${fyDt}</span></div>
              <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${fyRec.tb_data && fyRec.tb_data.ledgers ? fyRec.tb_data.ledgers.length : ''} ledgers &middot; key: <code>${FY_KEY}</code></div>
-             ${showDelete ? `<button onclick="mgDeleteRecord('${FY_KEY}')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(214,90,60,.25);background:rgba(214,90,60,.08);color:#c15a3f;font-size:11px;font-weight:600;cursor:pointer">🗑 Delete from cloud</button>` : ''}`
+             <button onclick="mgDeleteRecord('${FY_KEY}')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(214,90,60,.25);background:rgba(214,90,60,.08);color:#c15a3f;font-size:11px;font-weight:600;cursor:pointer">🗑 Delete from cloud</button>`
           : `<div style="color:var(--muted);font-size:11.5px;margin-bottom:10px">Not uploaded yet.<br>Upload a 12-month TB (1-Apr-26 to 31-Mar-27) and save to DB.</div>
              <div style="font-size:11px;color:var(--muted)">Key that will be used: <code>${FY_KEY}</code></div>`
         }
@@ -3450,7 +3447,7 @@
           <td>${ledgerCount}</td>
           <td style="display:flex;gap:6px;padding:8px 9px">
             <button onclick="mgLoadRecord('${esc_html(r.month_year)}')" style="padding:4px 10px;border-radius:8px;border:none;background:var(--navy);color:#fff;font-size:11px;font-weight:600;cursor:pointer">☁️ Load</button>
-            ${showDelete ? `<button onclick="mgDeleteRecord('${esc_html(r.month_year)}')" style="padding:4px 10px;border-radius:8px;border:none;background:rgba(214,90,60,.12);color:#c15a3f;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(214,90,60,.2)">🗑 Delete</button>` : ''}
+            <button onclick="mgDeleteRecord('${esc_html(r.month_year)}')" style="padding:4px 10px;border-radius:8px;border:none;background:rgba(214,90,60,.12);color:#c15a3f;font-size:11px;font-weight:600;cursor:pointer;border:1px solid rgba(214,90,60,.2)">🗑 Delete</button>
           </td>
         </tr>`;
       }).join('');
@@ -3681,7 +3678,7 @@
       else if (curView === 'trends') renderTrends();
       else if (curView === 'ytd') renderYTD();
       else if (curView === 'properties') renderProperties();
-      else if (curView === 'sales-register') renderManage();
+      else if (curView === 'manage') renderManage();
     }
 
 
@@ -3711,83 +3708,22 @@
     }
 
     /* init password check */
-    let userRole = 'read-write';
-    const userInput = document.getElementById('user-input');
     const passInput = document.getElementById('pass-input');
     const passSubmit = document.getElementById('pass-submit');
     const passError = document.getElementById('pass-error');
 
     function checkPassword() {
-      const username = userInput ? userInput.value.trim().toLowerCase() : '';
-      const password = passInput ? passInput.value : '';
-
-      if (password === '0S1' && (username === 'admin' || username === 'viewer' || username === 'sales')) {
-        if (username === 'admin') userRole = 'read-write';
-        else if (username === 'viewer') userRole = 'read-only';
-        else if (username === 'sales') userRole = 'sales-only';
-
+      if (passInput && passInput.value === '0S1') {
         const wrapEl = document.querySelector('.wrap');
         const screenEl = document.getElementById('password-screen');
         if (wrapEl) wrapEl.style.display = 'block';
         if (screenEl) screenEl.style.display = 'none';
-
-        applyRolePermissions();
         periodOptions();
         loadAllCloudData();
       } else {
         if (passError) passError.style.display = 'block';
-        if (userInput) userInput.style.borderColor = '#c0492f';
         if (passInput) passInput.style.borderColor = '#c0492f';
       }
-    }
-
-    function applyRolePermissions() {
-      const tabs = document.querySelectorAll('.tabs .tab');
-      tabs.forEach(t => {
-        const v = t.getAttribute('data-v');
-        if (userRole === 'sales-only') {
-          if (v === 'sales-register') {
-            t.style.display = 'block';
-            t.click();
-          } else {
-            t.style.display = 'none';
-          }
-        } else {
-          t.style.display = 'block';
-        }
-      });
-
-      const isWrite = (userRole === 'read-write');
-      const writeSelectors = [
-        '#upload',
-        '#save-tb-db',
-        '#depUpload',
-        '#depDelete',
-        '#propUpload',
-        '#propSaveDb',
-        '#sr-save-btn'
-      ];
-      writeSelectors.forEach(sel => {
-        const el = document.querySelector(sel);
-        if (el) {
-          el.style.setProperty('display', isWrite ? '' : 'none', 'important');
-        }
-      });
-
-      const isSalesOnly = (userRole === 'sales-only');
-      const srUploadCard = document.getElementById('sr-upload-card');
-      const mgKpis = document.getElementById('mgKpis');
-      const mgGuideCard = document.getElementById('mg-guide-card');
-      const mgTbSections = document.getElementById('mg-tb-sections-card');
-      const mgUploadsCard = document.getElementById('mg-uploads-card');
-
-      if (srUploadCard) srUploadCard.style.display = isSalesOnly ? 'none' : 'block';
-      if (mgKpis) mgKpis.style.display = isSalesOnly ? 'none' : '';
-      if (mgGuideCard) mgGuideCard.style.display = isSalesOnly ? 'none' : 'block';
-      if (mgTbSections) mgTbSections.style.display = isSalesOnly ? 'none' : '';
-      if (mgUploadsCard) mgUploadsCard.style.display = isSalesOnly ? 'none' : 'block';
-
-      renderManage();
     }
 
     if (passSubmit) {
@@ -3800,17 +3736,6 @@
       passInput.oninput = () => {
         if (passError) passError.style.display = 'none';
         passInput.style.borderColor = 'rgba(31, 58, 95, 0.15)';
-        if (userInput) userInput.style.borderColor = 'rgba(31, 58, 95, 0.15)';
-      };
-    }
-    if (userInput) {
-      userInput.onkeydown = e => {
-        if (e.key === 'Enter') checkPassword();
-      };
-      userInput.oninput = () => {
-        if (passError) passError.style.display = 'none';
-        passInput.style.borderColor = 'rgba(31, 58, 95, 0.15)';
-        if (userInput) userInput.style.borderColor = 'rgba(31, 58, 95, 0.15)';
       };
     }
 
@@ -3924,55 +3849,7 @@
       const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', cellDates: false, raw: true });
       const sheet = sheetName ? wb.Sheets[sheetName] : wb.Sheets[wb.SheetNames[0]];
       if (!sheet) throw new Error('Sheet not found: ' + (sheetName || 'first sheet'));
-      
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
-      if (rows.length === 0) return [];
-      
-      let headerIdx = -1;
-      for (let i = 0; i < Math.min(20, rows.length); i++) {
-        const row = rows[i];
-        if (Array.isArray(row)) {
-          const rowLower = row.map(cell => String(cell || '').toLowerCase().trim());
-          if (
-            rowLower.includes('confirmation code') || 
-            (rowLower.includes('type') && rowLower.includes('listing')) ||
-            rowLower.includes('referrer') ||
-            rowLower.includes('invoice number') ||
-            rowLower.includes('invoice no') ||
-            (rowLower.includes('particulars') && rowLower.includes('debit'))
-          ) {
-            headerIdx = i;
-            break;
-          }
-        }
-      }
-      
-      if (headerIdx === -1) {
-        headerIdx = 0;
-      }
-      
-      const headers = rows[headerIdx].map(h => String(h || '').trim());
-      const objects = [];
-      for (let i = headerIdx + 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-        const obj = {};
-        headers.forEach((h, colIdx) => {
-          if (h) {
-            obj[h] = row[colIdx] !== undefined ? row[colIdx] : '';
-          }
-        });
-        objects.push(obj);
-      }
-      
-      return objects.map(row => {
-        const clean = {};
-        for (const key of Object.keys(row)) {
-          const cleanKey = key.trim().replace(/^\t+/, '');
-          clean[cleanKey] = typeof row[key] === 'string' ? row[key].replace(/^\t+/, '').trim() : row[key];
-        }
-        return clean;
-      });
+      return XLSX.utils.sheet_to_json(sheet, { raw: true, defval: '' });
     }
 
     /**
@@ -4083,8 +3960,7 @@
         const resPayout = resPayoutRows.reduce((s, r) => s + parseNum(r['Amount']), 0);
 
         const taxableValue = reservPrice + serviceFees;
-        let rate = taxableValue !== 0 ? Math.round((gst / taxableValue) * 100) : 0;
-        if (rate >= 4 && rate <= 7) rate = 5;
+        const rate = taxableValue !== 0 ? Math.round((gst / taxableValue) * 100) : 0;
         const cgst = gst / 2;
         const sgst = gst / 2;
 
@@ -4164,7 +4040,6 @@
         } else {
           finalTaxableValue = basePrice * 0.95;
           rate = finalTaxableValue !== 0 ? Math.round((propertyTaxes / finalTaxableValue) * 100) : 0;
-          if (rate >= 4 && rate <= 7) rate = 5;
         }
 
         const gst = propertyTaxes;
@@ -4331,7 +4206,6 @@
           ratePercent = totalGst > 0 && finalTaxableValue > 0
             ? Math.round((totalGst / finalTaxableValue) * 100)
             : 0;
-          if (ratePercent >= 4 && ratePercent <= 7) ratePercent = 5;
         }
 
         const invoiceValue = finalTaxableValue + totalGst;
