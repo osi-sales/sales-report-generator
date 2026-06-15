@@ -3718,14 +3718,23 @@
     const passError = document.getElementById('pass-error');
 
     function checkPassword() {
-      const username = userInput ? userInput.value.trim().toLowerCase() : '';
+      const rawUser = userInput ? userInput.value : '';
+      const username = rawUser.trim().toLowerCase();
       const password = passInput ? passInput.value : '';
 
-      if (password === '0S1' && (username === 'admin' || username === 'viewer' || username === 'sales')) {
-        if (username === 'admin') userRole = 'read-write';
-        else if (username === 'viewer') userRole = 'read-only';
-        else if (username === 'sales') userRole = 'sales-only';
+      let isValid = false;
+      if (username === 'osi_1' && password === '0S1') {
+        userRole = 'read-write';
+        isValid = true;
+      } else if (username === 'osi_2' && password === '0S2') {
+        userRole = 'read-only';
+        isValid = true;
+      } else if (username === 'osi_3' && password === '0S3') {
+        userRole = 'sales-only';
+        isValid = true;
+      }
 
+      if (isValid) {
         const wrapEl = document.querySelector('.wrap');
         const screenEl = document.getElementById('password-screen');
         if (wrapEl) wrapEl.style.display = 'block';
