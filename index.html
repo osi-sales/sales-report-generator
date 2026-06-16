@@ -4705,7 +4705,7 @@
      */
     async function processDirect(file) {
       const buf = await readFileBuffer(file);
-      const rows = readXlsxRows(buf, 'in');
+      const rows = readXlsxRows(buf);
 
       // Filter out Airbnb and Goibibo referrers (case-insensitive prefix)
       const included = rows.filter(row => {
