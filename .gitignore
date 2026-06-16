@@ -11,6 +11,7 @@ dist/
 *.csv
 
 # ── Scratch / one-off scripts ────────────────────────────────
+scratch/
 scratch_*.py
 scratch_*.js
 

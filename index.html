@@ -1907,11 +1907,20 @@
     function periodOptions() {
       const mode = document.getElementById('period').value;
       const pick = document.getElementById('periodPick');
+      const prevVal = pick.value;
       let opts = '';
       if (mode === 'M') opts = DATA.months.map((m, i) => `<option value="${i}">${m}</option>`).join('');
       else if (mode === 'Q') opts = QUARTERS.map((q, i) => `<option value="${i}">${q[0]} (${DATA.months[q[1][0]]}–${DATA.months[q[1][2]]})</option>`).join('');
       else opts = `<option value="0">Full FY ${selectedStartYear}-${String(selectedStartYear + 1).slice(-2)}</option>`;
-      pick.innerHTML = opts; pick.selectedIndex = 0;
+      pick.innerHTML = opts;
+      if (prevVal !== "") {
+        const hasOpt = Array.from(pick.options).some(o => o.value === prevVal);
+        if (hasOpt) {
+          pick.value = prevVal;
+          return;
+        }
+      }
+      pick.selectedIndex = 0;
     }
     function activeMonths() {
       const mode = document.getElementById('period').value;
@@ -1981,6 +1990,8 @@
       "Sales Others": { stmt: "P&L", cat: "Revenue", sub: "Direct Sales", sign: 1 },
       "Rental Income": { stmt: "P&L", cat: "Revenue", sub: "Other Rental Sales", sign: 1 },
       "Interest on FD": { stmt: "P&L", cat: "Other Income", sub: "Other Income", sign: 1 },
+      "Interest Income": { stmt: "P&L", cat: "Other Income", sub: "Other Income", sign: 1 },
+      "Dividend": { stmt: "P&L", cat: "Other Income", sub: "Other Income", sign: 1 },
 
       // Direct Cost
       "Hosting Charges": { stmt: "P&L", cat: "Direct Cost", sub: "Hosting Charges", sign: 1 },
@@ -2008,6 +2019,10 @@
       "Rent": { stmt: "P&L", cat: "Other Expenses", sub: "Rent", sign: 1 },
       "Repairs & Maintenance": { stmt: "P&L", cat: "Other Expenses", sub: "Repairs & Maintenance", sign: 1 },
       "Travelling & Accomodation Expenses": { stmt: "P&L", cat: "Other Expenses", sub: "Travel", sign: 1 },
+      "Loss on Sale of Shares": { stmt: "P&L", cat: "Other Expenses", sub: "Other Expenses", sign: 1 },
+      "Audit Fees": { stmt: "P&L", cat: "Other Expenses", sub: "Legal Fees", sign: 1 },
+      "Deferred Tax Expenses": { stmt: "P&L", cat: "Other Expenses", sub: "G&A", sign: 1 },
+      "Shares Related Expenses": { stmt: "P&L", cat: "Other Expenses", sub: "Other Expenses", sign: 1 },
 
       // GST Expense
       "Rates & Taxes": { stmt: "P&L", cat: "GST Expense", sub: "GST Expense", sign: 1 },
@@ -2016,9 +2031,13 @@
       "PPE": { stmt: "BS", cat: "Fixed Assets", sub: "Building", sign: 1 },
       // parseClosingBalance returns negative for Cr balances, sign=1 keeps it negative → reduces PPE net correctly
       "Accumulated Depreciation": { stmt: "BS", cat: "Fixed Assets", sub: "Accumulated Depreciation", sign: 1 },
+      "Capital Works in Progress": { stmt: "BS", cat: "Fixed Assets", sub: "Building", sign: 1 },
+      "Capital work-in-progress": { stmt: "BS", cat: "Fixed Assets", sub: "Building", sign: 1 },
 
       // Current Assets
       "Deposits (Asset)": { stmt: "BS", cat: "Current Assets", sub: "Deposits", sign: 1 },
+      "Loans & Advances (Asset)": { stmt: "BS", cat: "Current Assets", sub: "Deposits", sign: 1 },
+      "Cash-in-Hand": { stmt: "BS", cat: "Current Assets", sub: "Bank Accounts", sign: 1 },
       "Sundry Debtors": { stmt: "BS", cat: "Current Assets", sub: "Sundry Debtors", sign: 1 },
       "Bank Accounts": { stmt: "BS", cat: "Current Assets", sub: "Bank Accounts", sign: 1 },
       "Sweep FD": { stmt: "BS", cat: "Investments", sub: "Sweep FD", sign: 1 },
@@ -2034,6 +2053,7 @@
       "Share Capital": { stmt: "BS", cat: "Equity", sub: "Share Capital", sign: -1 },
       "Reserves and Surplus": { stmt: "BS", cat: "Equity", sub: "Reserves & Surplus", sign: -1 },
       "OSI Hospitality(Prop)": { stmt: "BS", cat: "Equity", sub: "OSI Hospitality Prop", sign: -1 },
+      "Profit & Loss A/c": { stmt: "BS", cat: "Equity", sub: "Reserves & Surplus", sign: -1 },
 
       // Non-Current Liabilities
       "Loans (Liability)": { stmt: "BS", cat: "Non-Current Liabilities", sub: "Term Loan", sign: -1 },
@@ -2044,7 +2064,11 @@
       "Duties & Taxes": { stmt: "BS", cat: "Current Liabilities", sub: "GST Payable", sign: -1 },
       "Provisions": { stmt: "BS", cat: "Current Liabilities", sub: "TDS Payable", sign: -1 },
       "Sundry Creditors": { stmt: "BS", cat: "Current Liabilities", sub: "Trade Payables", sign: -1 },
-      "Suspense": { stmt: "BS", cat: "Suspense", sub: "Suspense", sign: 1 }
+      "Sundry Creditors for Expenses": { stmt: "BS", cat: "Current Liabilities", sub: "Trade Payables", sign: -1 },
+      "Sundry Creditors for Rent": { stmt: "BS", cat: "Current Liabilities", sub: "Trade Payables", sign: -1 },
+      "Credit Card Payable": { stmt: "BS", cat: "Current Assets", sub: "Credit Card Payments", sign: 1 },
+      "Suspense": { stmt: "BS", cat: "Suspense", sub: "Suspense", sign: 1 },
+      "Suspense A/c": { stmt: "BS", cat: "Suspense", sub: "Suspense", sign: 1 }
     };
 
     function ensureLedgerTemplates() {
@@ -2144,10 +2168,14 @@
       const rd = new FileReader();
       rd.onload = ev => {
         try {
-          const monthLabel = parseTB(new Uint8Array(ev.target.result));
+          const res = parseTB(new Uint8Array(ev.target.result));
           periodOptions();
           renderAll();
-          document.getElementById('status').textContent = `Loaded TB: ${monthLabel}`;
+          if (res.unmappedList.length > 0) {
+            document.getElementById('status').innerHTML = `Loaded TB: ${res.monthLabel} <span style="color:var(--red);font-weight:bold;margin-left:10px;">⚠️ Unmapped: ${res.unmappedList.join(', ')}</span>`;
+          } else {
+            document.getElementById('status').textContent = `Loaded TB: ${res.monthLabel}`;
+          }
         }
         catch (err) {
           document.getElementById('status').textContent = 'Error: ' + err.message;
@@ -2214,27 +2242,98 @@
       });
       // ─────────────────────────────────────────────────────────────────────
 
+      const unmappedList = [];
+      const IGNORED_GROUPS = ['Capital Account', 'Loans (Liability)', 'Secured Loans', 'Unsecured Loans', 'Current Liabilities', 'Fixed Assets', 'Investments', 'Current Assets', 'Misc. Expenses (ASSET)', 'Sales Accounts', 'Direct Expenses', 'Indirect Incomes', 'Indirect Expenses', 'Grand Total', 'GST', 'PT', 'TDS'];
+
+      // Check if granular sub-ledgers are present to avoid double-counting parent group
+      const hasGranularCreditors = rows.some(r => r && (String(r[0]).trim() === 'Sundry Creditors for Expenses' || String(r[0]).trim() === 'Sundry Creditors for Rent'));
+
       for (const row of rows) {
         if (!row || row.length === 0) continue;
         const particular = String(row[0]).trim();
+        if (!particular || particular === 'Particulars' || particular === 'Grand Total') continue;
+
+        if (particular === 'Sundry Creditors' && hasGranularCreditors) {
+          continue;
+        }
+
+        // Helper to parse values robustly based on row length
+        let debit = 0;
+        let credit = 0;
+        let closing = 0;
+        let opening = parseNum(row[1]);
+
+        if (row.length >= 5) {
+          debit = parseNum(row[2]);
+          credit = parseNum(row[3]);
+          closing = parseClosingBalance(row[4]);
+        } else if (row.length === 4) {
+          const val2 = String(row[2] || '').trim();
+          const val3 = String(row[3] || '').trim();
+          if (val2.toLowerCase().endsWith('cr')) {
+            credit = parseNum(val2);
+          } else if (val2.toLowerCase().endsWith('dr')) {
+            debit = parseNum(val2);
+          } else {
+            if (val3.toLowerCase().endsWith('cr')) {
+              credit = parseNum(val2);
+            } else {
+              debit = parseNum(val2);
+            }
+          }
+          closing = parseClosingBalance(val3);
+        } else if (row.length === 3) {
+          closing = parseClosingBalance(row[2]);
+          if (closing > 0) debit = closing;
+          else credit = -closing;
+        }
+
         const map = TALLY_MAPPING[particular];
-        if (!map) continue;
+        if (!map) {
+          if (debit !== 0 || credit !== 0 || closing !== 0 || opening !== 0) {
+            if (!IGNORED_GROUPS.includes(particular)) {
+              unmappedList.push(particular);
+              console.warn(`[Unmapped Ledger] "${particular}" | Opening: ${opening} | Closing: ${closing} | Debit: ${debit} | Credit: ${credit}`);
+            }
+          }
+          continue;
+        }
         const targetLedger = DATA.ledgers.find(l => l.name === particular);
         if (targetLedger) {
           if (map.stmt === 'P&L') {
-            const debit = parseNum(row[2]), credit = parseNum(row[3]);
+            let parsedVal = 0;
             if (map.cat === 'Revenue' || map.cat === 'Other Income') {
-              targetLedger.vals[monthIdx] = -(credit - debit);
+              parsedVal = -(credit - debit);
             } else {
-              targetLedger.vals[monthIdx] = debit - credit;
+              parsedVal = debit - credit;
             }
+
+            // For quarterly/yearly uploads, subtract preceding months in the same period to get monthly value
+            let priorSum = 0;
+            if (period.type === 'quarterly') {
+              const qNum = Math.floor(monthIdx / 3) + 1;
+              const startM = (qNum - 1) * 3;
+              for (let m = startM; m < monthIdx; m++) {
+                priorSum += targetLedger.vals[m] || 0;
+              }
+            } else if (period.type === 'yearly') {
+              for (let m = 0; m < monthIdx; m++) {
+                priorSum += targetLedger.vals[m] || 0;
+              }
+            }
+            targetLedger.vals[monthIdx] = parsedVal - priorSum;
           } else {
-            targetLedger.vals[monthIdx] = parseClosingBalance(row[4]);
+            targetLedger.vals[monthIdx] = closing;
           }
+          if (particular === 'Membership & Subscriptions' || particular === 'Airbnb Sales') {
+            console.log('Raw row for', particular, 'is:', JSON.stringify(row));
+          }
+          console.log('Parsed ledger:', particular, 'val =', targetLedger.vals[monthIdx]);
         }
       }
 
       DATA = normalize(DATA);
+      console.log('After normalize, DATA.ledgers.find(l => l.name === "Airbnb Sales") =', DATA.ledgers.find(l => l.name === 'Airbnb Sales'));
 
       const saveBtn = document.getElementById('save-tb-db');
       if (saveBtn) {
@@ -2243,7 +2342,7 @@
         saveBtn.dataset.monthLabel = period.label; // human label
       }
 
-      return period.label; // shown in status bar
+      return { monthLabel: period.label, unmappedList };
     }
 
     /* Resolve any DB key (YYYY-MM, YYYY-Q1..Q4, YYYY-FY) → DATA.months index
@@ -2736,11 +2835,13 @@
       const nca = bsClose(l => l.cat === 'Investments');    // TALLY_MAPPING uses 'Investments' (Sweep FD, Investment in Shares)
       const oa = bsClose(l => l.cat === 'Misc Expenses');  // TALLY_MAPPING uses 'Misc Expenses' (Preliminary Expenses)
       const totAssets = ppe + ca + nca + oa;
-      const cyProfit = cumPnlProfitTo(lastM);
+      // At year-end (March / index 11), Tally has passed closing entries transferring YTD net profit to reserves.
+      // So cyProfit in the Balance Sheet is set to 0 to avoid double-counting, and Profit & Loss A/c ledger is also kept ignored since reserves already contains it.
+      const cyProfit = lastM === 11 ? 0 : cumPnlProfitTo(lastM);
       // bsClose() with sign=-1 already returns positive values for Cr-balance liabilities/equity
       // (vals stored negative from parseClosingBalance, * sign=-1 = positive)
       const share = bsClose(l => l.cat === 'Equity' && l.sub === 'Share Capital');
-      const reserves = bsClose(l => l.cat === 'Equity' && l.sub !== 'Share Capital'); // Reserves & other equity items
+      const reserves = bsClose(l => l.cat === 'Equity' && l.sub !== 'Share Capital' && l.name !== 'Profit & Loss A/c'); // Reserves & other equity items
       const otherEquity = reserves + cyProfit;
       const eq = share + otherEquity;
       const ncl = bsClose(l => l.cat === 'Non-Current Liabilities');
@@ -3035,9 +3136,16 @@
 
 
     function renderOverview() {
+      const ms = activeMonths();
+      const lastM = periodLastMonth();
+      console.log('renderOverview debug:', {
+        ms: ms,
+        lastM: lastM,
+        DATA_months: DATA.months,
+        Airbnb_Sales_ledger: DATA.ledgers.find(l => l.name === 'Airbnb Sales')
+      });
       const rev = revenue(), oi = otherInc(), te = totalExp(), p = pbt(), np = pat();
       const ebitda = rev + oi - directExp() - empCost() - gstExp();
-      const lastM = periodLastMonth();
       const ca = bsAtMonth(l => l.cat === 'Current Assets', lastM);
       const cl = bsAtMonth(l => l.cat === 'Current Liabilities', lastM); // already positive (sign=-1 * Cr-val)
       const cash = cashAt(lastM);
