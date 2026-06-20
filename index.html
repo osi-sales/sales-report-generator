@@ -3467,8 +3467,8 @@
       }).join('');
     }
     async function renderProperties() {
-      // Auto-load from DB on first visit if no data is in memory
-      if (PROPERTIES.length === 0) await loadPropertiesFromDb();
+      // Auto-load from DB on first visit if not yet loaded
+      if (!propDbLoaded) await loadPropertiesFromDb();
       const P = PROPERTIES;
       const totRent = P.reduce((s, p) => s + curRent(p), 0);
       const totDep = P.reduce((s, p) => s + (p.deposit || 0), 0);
